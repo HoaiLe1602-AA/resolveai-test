@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Savani CSKH - Quản trị</title>
+<link rel="stylesheet" href="admin.css">
+</head>
+<body>
+<section id="login" class="login" hidden>
+  <form id="loginForm">
+    <h1>Đăng nhập nhân viên</h1>
+    <label>Tài khoản <input id="u" autocomplete="username" required></label>
+    <label>Mật khẩu <input id="p" type="password" autocomplete="current-password" required></label>
+    <button type="submit">Đăng nhập</button>
+    <p id="loginErr" class="err"></p>
+  </form>
+</section>
+
+<div id="app" hidden>
+  <header>
+    <strong>Savani CSKH</strong>
+    <nav id="tabs">
+      <button data-tab="queue" class="on">Hàng đợi</button>
+      <button data-tab="tickets">Ticket</button>
+      <button data-tab="history">Lịch sử</button>
+      <button data-tab="dash">Thống kê</button>
+      <button data-tab="kb">Tài liệu KB</button>
+    </nav>
+    <button id="logout" type="button">Đăng xuất</button>
+  </header>
+  <div id="toast" class="toast" hidden></div>
+
+  <section id="tab-queue" class="tab split">
+    <div class="list" id="queueList"></div>
+    <div class="conv" id="conv"><p class="muted">Chọn một phiên trong hàng đợi để xem hội thoại.</p></div>
+  </section>
+  <section id="tab-tickets" class="tab" hidden>
+    <div class="filters">
+      <select id="fStatus"><option value="">Mọi trạng thái</option><option>Mới</option><option>Đang xử lý</option><option>Đã hoàn thành</option></select>
+      <select id="fType"><option value="">Mọi loại</option><option>Đổi trả</option><option>Bảo hành</option><option>Khiếu nại</option></select>
+    </div>
+    <div class="split"><div class="list" id="ticketList"></div><div class="conv" id="ticketDetail"><p class="muted">Chọn một Ticket.</p></div></div>
+  </section>
+  <section id="tab-history" class="tab" hidden>
+    <div class="filters"><select id="hStatus"><option value="">Mọi trạng thái</option><option>AI_Handling</option><option>Waiting_Agent</option><option>Agent_Handling</option><option>Closed</option></select></div>
+    <div class="split"><div class="list" id="historyList"></div><div class="conv" id="historyDetail"><p class="muted">Chọn một phiên.</p></div></div>
+  </section>
+  <section id="tab-dash" class="tab" hidden><div id="dash" class="cards"></div></section>
+  <section id="tab-kb" class="tab" hidden><p class="muted">Quản lý kho tài liệu KB chưa được hiện thực trong khung mẫu (thuộc module RAG).</p></section>
+</div>
+<script src="admin.js"></script>
+</body>
+</html>
