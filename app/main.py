@@ -12,16 +12,13 @@ from .agent_port import AgentPort
 from .config import Settings, load_settings
 from .db import Database
 from .service import ApiError, ChatService
-from .stub_agent import StubAgent
 from .policy_admin import make_router as make_policy_router
 
 WEB_DIR = Path(__file__).resolve().parent.parent / "web"
 
 
 def build_agent(settings: Settings) -> AgentPort:
-    """FAKE_LLM=1: dùng StubAgent (không gọi API). FAKE_LLM=0: dùng Gemini, cần GEMINI_API_KEY."""
-    if settings.fake_llm:
-        return StubAgent()
+    """FAKE_LLM=0: dùng Gemini, cần GEMINI_API_KEY."""
     if not settings.gemini_api_key:
         raise RuntimeError("FAKE_LLM=0 cần biến môi trường GEMINI_API_KEY (khóa Gemini).")
     from .gemini_agent import GeminiAgent
