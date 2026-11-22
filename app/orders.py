@@ -1,4 +1,7 @@
 """Đơn hàng giả định + tra cứu cho chatbot ResolveAI.
+
+File này độc lập: không import gì từ phần còn lại của app, nên chép vào là chạy.
+Dữ liệu nằm trong bộ nhớ (đủ cho demo). Muốn thêm đơn: thêm một dòng _order(...) vào DEMO_ORDERS.
 """
 from __future__ import annotations
 
@@ -114,6 +117,16 @@ def extract_phone(text: str) -> Optional[str]:
     return None
 
 
+def extract_phone_or_last4(text: str) -> Optional[str]:
+    """Số điện thoại đầy đủ, hoặc 4 chữ số đứng riêng (4 số cuối) nếu không có số đầy đủ."""
+    full = extract_phone(text)
+    if full:
+        return full
+    rest = re.sub(r"\bDH[\s\-]?\d{3,6}\b", " ", text, flags=re.IGNORECASE)
+    m = re.search(r"(?<!\d)(\d{4})(?!\d)", rest)
+    return m.group(1) if m else None
+
+
 def is_order_query(text: str) -> bool:
     p = _plain(text)
     return any(k in p for k in ORDER_KEYWORDS)
@@ -121,9 +134,10 @@ def is_order_query(text: str) -> bool:
 
 # ---------------------------------------------------------------- tra cứu
 def find_order(code: str, phone: str) -> Optional[dict]:
-    """Chỉ trả đơn khi mã đơn VÀ số điện thoại cùng khớp (tránh lộ đơn của người khác)."""
+    """Chỉ trả đơn khi mã đơn VÀ số điện thoại (đầy đủ hoặc 4 số cuối) cùng khớp."""
     order = _BY_CODE.get((code or "").upper())
-    if order and order["phone"] == phone:
+    digits = re.sub(r"\D", "", phone or "")
+    if order and (order["phone"] == digits or (len(digits) == 4 and order["phone"].endswith(digits))):
         return order
     return None
 
@@ -154,7 +168,7 @@ def answer_order_query(text: str, history: Optional[list] = None) -> Optional[st
     với số điện thoại ở tin sau.
     """
     prev = list(history or [])
-    code, phone = extract_order_code(text), extract_phone(text)
+    code, phone = extract_order_code(text), extract_phone_or_last4(text)
     wants = is_order_query(text) or bool(code)
     if not wants and phone and any(extract_order_code(t) for t in prev):
         wants = True
@@ -163,13 +177,13 @@ def answer_order_query(text: str, history: Optional[list] = None) -> Optional[st
 
     for t in prev:  # lấy thông tin còn thiếu từ các tin trước
         code = code or extract_order_code(t)
-        phone = phone or extract_phone(t)
+        phone = phone or extract_phone_or_last4(t)
 
     if not code:
         return ("Để tra cứu đơn hàng, bạn vui lòng gửi giúp mình mã đơn (dạng DH1001) "
-                "và số điện thoại đặt hàng nhé.")
+                "và số điện thoại đặt hàng (hoặc 4 số cuối) nhé.")
     if not phone:
-        return (f"Mình đã nhận mã đơn {code}. Bạn vui lòng gửi thêm số điện thoại đặt hàng "
+        return (f"Mình đã nhận mã đơn {code}. Bạn vui lòng gửi thêm số điện thoại đặt hàng (hoặc 4 số cuối) "
                 "để mình xác minh và tra cứu nhé.")
     order = find_order(code, phone)
     if not order:
