@@ -35,22 +35,15 @@ def test_rate_limit_429_header(client):
     assert codes[-1].status_code == 429 and "retry-after" in codes[-1].headers
 
 
-def test_admin_open_without_login_by_default(client):
+def test_admin_open_without_login_and_static_pages(client):
     assert client.get("/api/admin/queue").status_code == 200
-    me = client.get("/api/admin/me").json()
-    assert me["auth_required"] is False
-    assert client.get("/").status_code == 200 and client.get("/admin/").status_code == 200
-    assert client.get("/widget/chatbot.js").status_code == 200
-
-
-def test_admin_requires_login_and_cookie_flags(tmp_path):
-    s = Settings(data_dir=tmp_path, secret_key="k", admin_user="admin", admin_password="pw12345", hotline="1900",
-                 admin_auth=True)
-    client = TestClient(create_app(s))
-    assert client.get("/api/admin/queue").status_code == 401
-    r = client.post("/api/admin/login", json={"username": "admin", "password": "pw12345"})
-    assert r.status_code == 200
-    sc = r.headers["set-cookie"].lower()
-    assert "httponly" in sc and "samesite=strict" in sc
-    assert client.get("/api/admin/queue").status_code == 200
-    assert client.get("/api/admin/kb/docs").status_code == 200
+    assert client.get("/api/admin/login").status_code in (404, 405)
+    docs = client.get("/api/admin/kb/docs").json()["items"]
+    assert [d["doc_code"] for d in docs] == ["KB-01", "KB-02", "KB-03", "KB-04", "KB-05", "KB-06"]
+    assert "7 ngày" in client.get("/api/admin/kb/docs/KB-01").json()["content"]
+    assert client.get("/api/admin/kb/docs/KB-99").status_code == 404
+    assert client.post("/api/admin/kb/docs").status_code == 501
+    assert "SAVANI" in client.get("/").text
+    assert client.get("/chat/").status_code == 200
+    assert client.get("/widget/widget.js").status_code == 200
+    assert client.get("/admin/").status_code == 200

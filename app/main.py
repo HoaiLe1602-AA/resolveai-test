@@ -3,8 +3,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from fastapi import Cookie, Depends, FastAPI, Header, Request
-from fastapi.middleware.cors import CORSMiddleware
+from fastapi import Depends, FastAPI, Header, Request
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
@@ -12,23 +11,20 @@ from pydantic import BaseModel
 from .agent_port import AgentPort
 from .config import Settings, load_settings
 from .db import Database
-from .gemini_agent import GeminiAgent, http_transport
-from .orders import OrderRepo
-from .policies import PolicyRepo
 from .service import ApiError, ChatService
 from .stub_agent import StubAgent
 
 WEB_DIR = Path(__file__).resolve().parent.parent / "web"
 
 
-def build_agent(settings: Settings, db: Database, kb: PolicyRepo | None = None) -> AgentPort:
-    """FAKE_LLM=1: Agent mẫu theo từ khóa. FAKE_LLM=0: Gemini (cần GEMINI_API_KEY) + tra cứu đơn hàng."""
+def build_agent(settings: Settings) -> AgentPort:
+    """FAKE_LLM=1: dùng StubAgent (không gọi API). FAKE_LLM=0: dùng Gemini, cần GEMINI_API_KEY."""
     if settings.fake_llm:
-        return StubAgent(orders=OrderRepo(db), kb_search=kb.search if kb else None)
+        return StubAgent()
     if not settings.gemini_api_key:
-        raise RuntimeError("FAKE_LLM=0 cần GEMINI_API_KEY trong file .env")
-    return GeminiAgent(OrderRepo(db), http_transport(settings.gemini_api_key, settings.llm_model),
-                       hotline=settings.hotline, policy_provider=kb.text if kb else None)
+        raise RuntimeError("FAKE_LLM=0 cần biến môi trường GEMINI_API_KEY (khóa Gemini).")
+    from .gemini_agent import GeminiAgent
+    return GeminiAgent(settings)
 
 
 class ChatIn(BaseModel):
@@ -38,18 +34,8 @@ class ChatIn(BaseModel):
     action: str | None = None
 
 
-class LoginIn(BaseModel):
-    username: str
-    password: str
-
-
 class TextIn(BaseModel):
     text: str
-
-
-class PolicyIn(BaseModel):
-    title: str
-    content: str
 
 
 class StatusIn(BaseModel):
@@ -61,27 +47,22 @@ def create_app(settings: Settings | None = None, agent: AgentPort | None = None)
     settings = settings or load_settings()
     db = Database(settings.app_db_path)
     db.init()
-    if settings.seed_demo_orders:
-        OrderRepo(db).seed_demo()
-    kb = PolicyRepo(db)
-    kb.seed_defaults()
-    svc = ChatService(db, settings, agent or build_agent(settings, db, kb))
+    svc = ChatService(db, settings, agent or build_agent(settings))
     svc.ensure_bootstrap_admin()
+    if settings.seed_demo:
+        from .demo_seed import seed_demo
+        seed_demo(db, settings)
 
     app = FastAPI(title="ResolveAI", docs_url=None, redoc_url=None, openapi_url=None)
     app.state.service = svc
-
-    if settings.cors_origins:
-        app.add_middleware(CORSMiddleware, allow_origins=list(settings.cors_origins),
-                           allow_methods=["GET", "POST"], allow_headers=["Content-Type", "X-Session-Token"])
 
     @app.exception_handler(ApiError)
     async def _api_error(_: Request, e: ApiError):
         body = {"error": {"code": e.code, "message": e.message, **e.extra}}
         return JSONResponse(body, status_code=e.status, headers=e.headers)
 
-    def staff(admin_session: str | None = Cookie(default=None)) -> dict:
-        return svc.require_staff(admin_session)
+    def staff() -> dict:
+        return svc.require_staff()
 
     # ---------------- khách hàng
     @app.get("/healthz")
@@ -101,24 +82,9 @@ def create_app(settings: Settings | None = None, agent: AgentPort | None = None)
         return svc.get_messages(session_id, x_session_token, after)
 
     # ---------------- nhân viên
-    @app.post("/api/admin/login")
-    def login(body: LoginIn):
-        token = svc.login(body.username, body.password)
-        resp = JSONResponse({"ok": True})
-        resp.set_cookie("admin_session", token, httponly=True, samesite="strict",
-                        secure=settings.cookie_secure, max_age=settings.staff_session_hours * 3600, path="/")
-        return resp
-
-    @app.post("/api/admin/logout")
-    def logout(admin_session: str | None = Cookie(default=None)):
-        svc.logout(admin_session)
-        resp = JSONResponse({"ok": True})
-        resp.delete_cookie("admin_session", path="/")
-        return resp
-
     @app.get("/api/admin/me")
     def me(s: dict = Depends(staff)):
-        return {**s, "auth_required": settings.admin_auth}
+        return s
 
     @app.get("/api/admin/queue")
     def queue(_: dict = Depends(staff)):
@@ -162,24 +128,22 @@ def create_app(settings: Settings | None = None, agent: AgentPort | None = None)
 
     @app.get("/api/admin/kb/docs")
     def kb_list(_: dict = Depends(staff)):
-        return {"items": kb.list()}
+        return {"items": svc.kb_list()}
 
-    @app.post("/api/admin/kb/docs")
-    def kb_create(body: PolicyIn, _: dict = Depends(staff)):
-        return kb.create(body.title, body.content)
+    @app.get("/api/admin/kb/docs/{doc_code}")
+    def kb_get(doc_code: str, _: dict = Depends(staff)):
+        return svc.kb_get(doc_code)
 
-    @app.put("/api/admin/kb/docs/{doc_id}")
-    def kb_update(doc_id: int, body: PolicyIn, _: dict = Depends(staff)):
-        return kb.update(doc_id, body.title, body.content)
-
-    @app.delete("/api/admin/kb/docs/{doc_id}")
-    def kb_delete(doc_id: int, _: dict = Depends(staff)):
-        return kb.delete(doc_id)
+    @app.api_route("/api/admin/kb/docs", methods=["POST"])
+    @app.api_route("/api/admin/kb/docs/{doc_code}", methods=["PUT", "DELETE"])
+    def kb_write(doc_code: str | None = None, _: dict = Depends(staff)):
+        svc.kb_not_implemented()
 
     # ---------------- giao diện tĩnh (đặt sau cùng để không che /api)
     app.mount("/admin", StaticFiles(directory=WEB_DIR / "admin", html=True), name="admin")
-    app.mount("/widget", StaticFiles(directory=WEB_DIR / "widget"), name="widget")
-    app.mount("/", StaticFiles(directory=WEB_DIR / "shop", html=True), name="shop")
+    app.mount("/chat", StaticFiles(directory=WEB_DIR / "chat", html=True), name="chat")      # khung chat (iframe)
+    app.mount("/widget", StaticFiles(directory=WEB_DIR / "widget"), name="widget")           # nút chatbot nhúng
+    app.mount("/", StaticFiles(directory=WEB_DIR / "store", html=True), name="store")        # trang bán hàng demo
     return app
 
 

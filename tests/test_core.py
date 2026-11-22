@@ -22,7 +22,7 @@ def last(r):
 
 
 def staff(svc):
-    return svc.require_staff(svc.login("admin", "pw12345"))
+    return svc.require_staff()
 
 
 def to_handoff(svc):
@@ -222,21 +222,24 @@ def test_business_hours(y, m, d, h, mi, exp):
     assert in_business_hours(datetime(y, m, d, h, mi, tzinfo=ZoneInfo("Asia/Ho_Chi_Minh"))) is exp
 
 
-def test_admin_login_and_hash(svc):
-    with pytest.raises(ApiError) as e:
-        svc.login("admin", "sai")
-    assert e.value.status == 401
-    with pytest.raises(ApiError):
-        svc.login("ghost", "x")
+def test_admin_no_login_and_hash(svc):
+    st = svc.require_staff()
+    assert st["username"] == "admin" and st["id"]
+    assert svc.require_staff(None) == st
     h = security.hash_password("abc")
     assert "abc" not in h and security.check_password("abc", h) and not security.check_password("abd", h)
-    with pytest.raises(ApiError) as e:
-        svc.require_staff(None)
-    assert e.value.status == 401
-    tok = svc.login("admin", "pw12345")
-    svc.logout(tok)
-    with pytest.raises(ApiError):
-        svc.require_staff(tok)
+
+
+def test_size_advice():
+    from app.agent_port import AgentInput
+    from app.stub_agent import StubAgent
+    a, st = StubAgent(), {}
+    for msg in ["tư vấn size giúp mình", "nam", "1m75 70kg"]:
+        o = a.run_turn(AgentInput("s", msg, None, st, True))
+        st = o.state
+    assert "size L" in o.reply and o.sources and "flow" not in st
+    o = a.run_turn(AgentInput("s", "nữ 1m60 48kg size nào", None, {}, True))
+    assert "size M" in o.reply
 
 
 def test_dashboard(svc):

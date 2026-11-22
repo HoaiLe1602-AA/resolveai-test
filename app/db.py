@@ -68,26 +68,6 @@ CREATE TABLE IF NOT EXISTS staff(
   password_hash TEXT NOT NULL,
   created_at TEXT NOT NULL
 );
-CREATE TABLE IF NOT EXISTS shop_order(
-  code TEXT PRIMARY KEY,
-  phone_last4 TEXT NOT NULL,
-  customer_name TEXT,
-  status TEXT NOT NULL,
-  items_json TEXT NOT NULL,
-  total INTEGER NOT NULL,
-  payment TEXT,
-  carrier TEXT,
-  tracking TEXT,
-  note TEXT,
-  created_at TEXT NOT NULL,
-  updated_at TEXT NOT NULL
-);
-CREATE TABLE IF NOT EXISTS policy_doc(
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  title TEXT NOT NULL,
-  content TEXT NOT NULL,
-  updated_at TEXT NOT NULL
-);
 CREATE TABLE IF NOT EXISTS staff_session(
   token_hash TEXT PRIMARY KEY,
   staff_id INTEGER NOT NULL REFERENCES staff(id),

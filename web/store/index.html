@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Savani · Thời trang nam nữ (trang demo)</title>
+<link rel="stylesheet" href="store.css">
+</head>
+<body>
+<div class="topbar">Miễn phí ship đơn từ 500K · Đổi hàng trong 7 ngày</div>
+<header class="site">
+  <a class="logo" href="/" aria-label="Savani - trang chủ">SAVANI</a>
+  <nav aria-label="Danh mục">
+    <a href="#moi">Hàng mới về</a><a href="#nam">Nam</a><a href="#nu">Nữ</a><a href="#tre-em">Trẻ em</a><a href="#uu-dai">Ưu đãi</a>
+  </nav>
+  <button class="cart" id="cart" type="button" aria-label="Giỏ hàng">
+    <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 8h14l-1 12H6L5 8z"/><path d="M9 8a3 3 0 0 1 6 0"/></svg>
+    <span id="cartN">0</span>
+  </button>
+</header>
+
+<section class="hero">
+  <div class="hero-in">
+    <p class="eyebrow">Bộ sưu tập cuối năm</p>
+    <h1>Mặc đẹp mỗi ngày,<br>vừa vặn từng size.</h1>
+    <p>Chưa biết chọn size nào? Bấm vào biểu tượng chatbot ở góc phải màn hình để được tư vấn size, đổi trả và bảo hành ngay.</p>
+    <a class="btn" href="#nam">Mua sắm ngay</a>
+  </div>
+</section>
+
+<ul class="perks">
+  <li><b>Miễn phí giao hàng</b><span>Đơn từ 500K, toàn quốc</span></li>
+  <li><b>Kiểm tra hàng khi thanh toán</b><span>Nhận hàng, ưng ý mới trả tiền</span></li>
+  <li><b>Đổi hàng linh hoạt</b><span>Trong 7 ngày kể từ ngày nhận hàng</span></li>
+  <li><b>Tư vấn nhanh chóng</b><span>Chat với trợ lý ở góc màn hình</span></li>
+</ul>
+
+<main>
+  <h2 id="moi">Hàng mới về</h2>
+  <div class="grid" id="grid"></div>
+</main>
+
+<footer>
+  <p><b>SAVANI</b></p>
+</footer>
+
+<script src="store.js"></script>
+<script src="/widget/widget.js" defer></script>
+</body>
+</html>
