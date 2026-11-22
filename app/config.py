@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 import os
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 
 
@@ -26,6 +26,9 @@ class Settings:
     cookie_secure: bool = False             # đặt 1 khi chạy sau HTTPS
     staff_session_hours: int = 8
     fake_llm: bool = True                   # True: dùng StubAgent, không gọi API
+    gemini_api_key: str = field(default="", repr=False)  # khóa API Gemini (đặt qua biến môi trường GEMINI_API_KEY)
+    llm_model: str = "gemini-2.5-flash"
+    llm_timeout: float = 20.0               # giây chờ Gemini trước khi quay về câu trả lời mẫu
     seed_demo: bool = False                 # True: nạp dữ liệu mẫu cho trang quản trị (xem app/demo_seed.py)
     policies_dir: Path = Path(__file__).resolve().parent.parent / "data" / "policies"
 
@@ -49,6 +52,9 @@ def load_settings() -> Settings:
         cookie_secure=_bool(e("COOKIE_SECURE")),
         staff_session_hours=int(e("STAFF_SESSION_HOURS", "8")),
         fake_llm=_bool(e("FAKE_LLM"), True),
+        gemini_api_key=e("GEMINI_API_KEY", "").strip(),
+        llm_model=e("LLM_MODEL", "").strip() or "gemini-2.5-flash",
+        llm_timeout=float(e("LLM_TIMEOUT", "20")),
         seed_demo=_bool(e("SEED_DEMO"), False),
         policies_dir=Path(e("POLICIES_DIR", str(Path(__file__).resolve().parent.parent / "data" / "policies"))),
     )
