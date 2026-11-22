@@ -18,13 +18,13 @@ WEB_DIR = Path(__file__).resolve().parent.parent / "web"
 
 
 def build_agent(settings: Settings) -> AgentPort:
-    """FAKE_LLM=1: dùng StubAgent (không gọi API). FAKE_LLM=0: dùng Gemini, cần GEMINI_API_KEY."""
+    """FAKE_LLM=1 dùng StubAgent; FAKE_LLM=0 dùng Gemini với tool calling, cần GEMINI_API_KEY."""
     if settings.fake_llm:
-        return StubAgent()
+        return StubAgent(settings)
     if not settings.gemini_api_key:
         raise RuntimeError("FAKE_LLM=0 cần biến môi trường GEMINI_API_KEY (khóa Gemini).")
     from .gemini_agent import GeminiAgent
-    return GeminiAgent(settings)
+    return GeminiAgent(settings, fallback=StubAgent(settings))
 
 
 class ChatIn(BaseModel):
