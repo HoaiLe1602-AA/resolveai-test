@@ -69,7 +69,14 @@ def _fields_for(ticket_type: str) -> list[str]:
     return base + ["description"]
 
 
+def _vnd(n: int) -> str:
+    return f"{n:,}".replace(",", ".") + "đ"
+
+
 class StubAgent:
+    def __init__(self, orders=None, kb_search=None):
+        self.orders, self.kb_search = orders, kb_search   # orders: OrderRepo; kb_search: PolicyRepo.search
+
     def run_turn(self, inp: AgentInput) -> AgentOutput:
         state = dict(inp.state)
         t = norm(inp.text)
@@ -110,6 +117,15 @@ class StubAgent:
             state.update(flow="ticket", draft={"type": ttype}, asking=None, awaiting_confirm=False)
             return self._ask_next(state, "Mình sẽ ghi nhận yêu cầu " + ttype.lower() + " của bạn. ", ttype)
 
+        # ---- Tra cứu đơn hàng: hỏi mã đơn, rồi 4 số cuối SĐT, rồi tra
+        if self.orders and (_has(t, ["don hang", "ma don", "tra don", "kiem tra don"])
+                            or re.search(r"\bsv[-\s]?\d{6}\b", t)
+                            or (state.get("order_flow") and re.search(r"\d{4}", t))):
+            return self._order_step(inp, state)
+
+        if state.get("order_flow"):   # đang chờ thông tin đơn nhưng khách hỏi chuyện khác: bỏ luồng tra đơn
+            state.update(order_flow=False, order_code=None, order_phone4=None)
+
         # ---- Tư vấn size: hỏi chiều cao/cân nặng rồi gợi ý
         h, w = _parse_body(t)
         if h and w and (state.get("size_flow") or "size" in t or "mac vua" in t):
@@ -120,6 +136,13 @@ class StubAgent:
             state["size_flow"] = True
             return AgentOutput("Bạn cho mình biết chiều cao và cân nặng (ví dụ: 1m70, 65kg) để mình gợi ý size nhé. "
                                "Bạn cũng có thể nói rõ mẫu quần áo bạn đang quan tâm.", state, intent="Tư vấn")
+
+        # ---- Chính sách do nhân viên nhập ở trang quản trị (ưu tiên hơn nội dung mẫu bên dưới)
+        if self.kb_search:
+            doc = self.kb_search(inp.text)
+            if doc:
+                return AgentOutput(doc["content"], state, intent="Tư vấn",
+                                   sources=[{"title": doc["title"], "section": "Chính sách"}])
 
         # ---- Tư vấn theo dữ liệu mẫu
         if _has(t, ["doi tra", "doi hang", "tra hang", "doi size"]):
@@ -163,6 +186,40 @@ class StubAgent:
                                state)
         return AgentOutput("Mình chưa có thông tin chính thức cho câu hỏi này.", state,
                            intent=state.get("intent"), handoff_reason="HO-01")
+
+    # ------------------------------------------------------------------ Tra đơn
+    def _order_step(self, inp: AgentInput, state: dict) -> AgentOutput:
+        text = inp.text
+        m = re.search(r"\bsv[-\s]?(\d{6})\b", text, re.I)
+        code = ("SV" + m.group(1)) if m else state.get("order_code")
+        rest = text[:m.start()] + " " + text[m.end():] if m else text
+        digits = re.findall(r"\d{4,}", rest)
+        phone4 = digits[-1][-4:] if digits else state.get("order_phone4")
+        state.update(order_flow=True, order_code=code, order_phone4=phone4)
+        if not code:
+            return AgentOutput("Bạn cho mình mã đơn hàng nhé (ví dụ: SV100001).", state, intent="Đơn hàng")
+        if not phone4:
+            return AgentOutput(f"Mình đã nhận mã đơn {code}. Bạn nhập thêm 4 số cuối số điện thoại đặt hàng để mình xác thực nhé.",
+                               state, intent="Đơn hàng")
+        if state.get("order_fails", 0) >= 5:
+            return AgentOutput("Bạn đã thử quá nhiều lần, mình chuyển nhân viên CSKH hỗ trợ.", state,
+                               intent="Đơn hàng", handoff_reason="HO-01")
+        o = self.orders.lookup(code, phone4)
+        state.update(order_code=None, order_phone4=None)
+        if o is None:
+            state["order_fails"] = state.get("order_fails", 0) + 1
+            return AgentOutput("Mình không tìm thấy đơn hàng khớp với thông tin này. Bạn kiểm tra lại mã đơn và "
+                               "4 số cuối SĐT rồi gửi lại giúp mình nhé.", state, intent="Đơn hàng")
+        state.update(order_flow=False, order_fails=0)
+        items = "; ".join(f"{i['name']} (size {i['size']}) x{i['qty']}" for i in o["items"])
+        lines = [f"Đơn {o['code']} (đặt ngày {o['created_at']}): {o['status']}.", f"Sản phẩm: {items}.",
+                 f"Tổng tiền: {_vnd(o['total'])} - {o['payment']}."]
+        if o["carrier"]:
+            lines.append(f"Vận chuyển: {o['carrier']}, mã vận đơn {o['tracking']}.")
+        if o["note"]:
+            lines.append(o["note"] + ".")
+        return AgentOutput("\n".join(lines), state, intent="Đơn hàng",
+                           sources=[{"title": "Tra cứu đơn hàng", "section": o["code"]}])
 
     # ------------------------------------------------------------------ Ticket
     @staticmethod

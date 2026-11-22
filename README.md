@@ -20,7 +20,7 @@ Kiểm thử: `pip install -r requirements-dev.txt && pytest`.
 - `app/gemini_agent.py` Agent Gemini (hiểu viết tắt, gọi công cụ tra đơn/size/ticket/handoff); `app/orders.py` tra cứu đơn.
 
 ## Thử tra đơn (dữ liệu mẫu, cần đúng cả mã đơn và 4 số cuối SĐT)
-SV100001/5678 (đang giao), SV100002/1234 (đã giao), SV100003/9999 (đang chuẩn bị), SV100004/4321 (đã hủy).
+SV100001/5678 đang giao, SV100002/1234 đã giao, SV100003/9999 đang chuẩn bị, SV100004/4321 đã hủy, SV100005/2468 chờ xác nhận, SV100006/1357 đang giao, SV100007/8080 đã giao quá 30 ngày, SV100008/7777 hoàn trả, SV100009/3690 đã giao, SV100010/0001 đang chuẩn bị. Đơn mẫu tự thêm vào DB khi server khởi động (không ghi đè đơn đã có).
 
 ## Agent
 `FAKE_LLM=0` + `GEMINI_API_KEY` dùng GeminiAgent. Muốn thay bằng Agent LangGraph (Mục 20):
@@ -29,8 +29,13 @@ Agent chỉ *đề nghị* tạo Ticket/Handoff; Backend tự kiểm tra điều
 
 ## Giới hạn đã biết (cần team quyết/hiện thực tiếp)
 - Agent mẫu dùng dữ liệu chính sách mẫu; chưa có RAG/Chroma, MCP tool, Guardrail thật, Langfuse.
-- API quản lý KB (`/api/admin/kb/*`) trả 501.
+- Kho chính sách (tab "Chính sách" ở admin) là văn bản thuần đưa vào prompt, chưa có RAG/Chroma nên đừng nhập quá dài (tối đa khoảng 20.000 ký tự tổng).
 - Chỉ 1 worker: giới hạn tần suất và khóa phiên nằm trong bộ nhớ.
 - Hotline là chỗ trống (`HOTLINE`). EX-COM-04 (tạo Ticket ngoài giờ khi Handoff) chưa làm.
 - Mã Ticket theo BR5 `TK-YYYYMMDDXXXX`; Mục 18 ghi `TK-YYYYMMDD-XXXX` - cần thống nhất rồi sửa `_ticket_write`.
 - Khóa phiên bản thư viện (`pip freeze`) trước khi nộp. Dùng Gemini miễn phí thì chỉ nạp dữ liệu mẫu.
+
+## Triển khai trên Render
+- Tạo Web Service kiểu Docker. Biến môi trường: `PORT=8000`, `FAKE_LLM=0`, `GEMINI_API_KEY`, `LLM_MODEL`, `SECRET_KEY` (chuỗi ngẫu nhiên, đặt cố định), `HOTLINE`, `COOKIE_SECURE=1`.
+- **Bắt buộc gắn Disk** (Render > Disks) với Mount Path `/var/lib/resolveai`. Không có Disk thì SQLite (hội thoại, ticket) bị xóa mỗi lần deploy/khởi động lại. Gói Free không có Disk.
+- Chỉ chạy 1 instance (không scale ngang) vì dùng SQLite và bộ đếm trong bộ nhớ.

@@ -53,4 +53,4 @@ def test_admin_requires_login_and_cookie_flags(tmp_path):
     sc = r.headers["set-cookie"].lower()
     assert "httponly" in sc and "samesite=strict" in sc
     assert client.get("/api/admin/queue").status_code == 200
-    assert client.get("/api/admin/kb/docs").status_code == 501
+    assert client.get("/api/admin/kb/docs").status_code == 200

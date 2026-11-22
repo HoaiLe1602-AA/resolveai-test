@@ -19,8 +19,8 @@
   var BOT = '<svg viewBox="0 0 48 48" aria-hidden="true"><circle cx="24" cy="24" r="23" fill="#fff"/><path d="M24 7v5" stroke="#d4141c" stroke-width="3" stroke-linecap="round"/><circle cx="24" cy="6" r="3" fill="#d4141c"/><rect x="9" y="12" width="30" height="24" rx="10" fill="#141414"/><circle cx="18" cy="23" r="3.4" fill="#fff"/><circle cx="30" cy="23" r="3.4" fill="#fff"/><path d="M18 30c2 2.2 10 2.2 12 0" stroke="#d4141c" stroke-width="2.6" fill="none" stroke-linecap="round"/><rect x="5" y="19" width="4" height="9" rx="2" fill="#d4141c"/><rect x="39" y="19" width="4" height="9" rx="2" fill="#d4141c"/></svg>';
 
   var sid = null, token = null, lastId = 0, sending = false, poll = null, shown = {}, chatStarted = false;
-  function store(k, v) { try { v === null ? sessionStorage.removeItem(k) : sessionStorage.setItem(k, v); } catch (e) {} }
-  function load(k) { try { return sessionStorage.getItem(k); } catch (e) { return null; } }
+  function store(k, v) { try { v === null ? localStorage.removeItem(k) : localStorage.setItem(k, v); } catch (e) {} }
+  function load(k) { try { return localStorage.getItem(k); } catch (e) { return null; } }
   function uuid() { return crypto.randomUUID ? crypto.randomUUID() : String(Date.now()) + Math.random().toString(16).slice(2); }
   function el(tag, cls, text) { var e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; }
 
@@ -128,11 +128,11 @@
 
   // ---------- mở/đóng
   function open(text) {
-    panel.hidden = false; tip.hidden = true; fab.setAttribute("aria-expanded", "true");
+    panel.hidden = false; tip.hidden = true; store("sv_open", "1"); fab.setAttribute("aria-expanded", "true");
     if (fab.querySelector(".dot")) fab.querySelector(".dot").hidden = true;
     if (text) send(text); else setTimeout(function () { input.focus(); }, 0);
   }
-  function close() { panel.hidden = true; fab.setAttribute("aria-expanded", "false"); fab.focus(); }
+  function close() { panel.hidden = true; store("sv_open", null); fab.setAttribute("aria-expanded", "false"); fab.focus(); }
   fab.addEventListener("click", function () { panel.hidden ? open() : close(); });
   closeBtn.addEventListener("click", close);
   tipX.addEventListener("click", function () { tip.hidden = true; });
@@ -143,11 +143,16 @@
   function boot() {
     document.body.appendChild(root); tip.hidden = true; setTimeout(function () { if (panel.hidden) tip.hidden = false; }, 3500);
     sid = load("sv_sid"); token = load("sv_token"); applyStatus("AI_Handling");
-    if (sid && token) {
+    if (sid && token) {   // tải lại trang: dựng lại lời chào rồi nạp lịch sử từ máy chủ
+      greet();
       fetch(API + "/api/chat/sessions/" + encodeURIComponent(sid) + "/messages?after=0", { headers: { "X-Session-Token": token } })
-        .then(function (r) { return r.ok ? r.json() : Promise.reject(); })
-        .then(function (d) { chips.hidden = true; apply(d); if (!d.messages.length) greet(); })
-        .catch(function () { reset(false); });
+        .then(function (r) { return r.status === 403 ? Promise.reject("gone") : r.ok ? r.json() : Promise.reject("err"); })
+        .then(function (d) { chips.hidden = d.messages.length > 0; apply(d); })
+        .catch(function (why) {
+          if (why === "gone") { reset(true); showBanner("Cuộc trò chuyện trước đó không còn trên máy chủ nên đã bắt đầu lại."); }
+          else showBanner(offlineText());
+        });
+      if (load("sv_open") === "1") open();
     } else greet();
   }
   window.SavaniChat = { open: open, close: close };

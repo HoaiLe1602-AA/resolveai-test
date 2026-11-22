@@ -14,20 +14,21 @@ from .config import Settings, load_settings
 from .db import Database
 from .gemini_agent import GeminiAgent, http_transport
 from .orders import OrderRepo
+from .policies import PolicyRepo
 from .service import ApiError, ChatService
 from .stub_agent import StubAgent
 
 WEB_DIR = Path(__file__).resolve().parent.parent / "web"
 
 
-def build_agent(settings: Settings, db: Database) -> AgentPort:
+def build_agent(settings: Settings, db: Database, kb: PolicyRepo | None = None) -> AgentPort:
     """FAKE_LLM=1: Agent mẫu theo từ khóa. FAKE_LLM=0: Gemini (cần GEMINI_API_KEY) + tra cứu đơn hàng."""
     if settings.fake_llm:
-        return StubAgent()
+        return StubAgent(orders=OrderRepo(db), kb_search=kb.search if kb else None)
     if not settings.gemini_api_key:
         raise RuntimeError("FAKE_LLM=0 cần GEMINI_API_KEY trong file .env")
     return GeminiAgent(OrderRepo(db), http_transport(settings.gemini_api_key, settings.llm_model),
-                       hotline=settings.hotline)
+                       hotline=settings.hotline, policy_provider=kb.text if kb else None)
 
 
 class ChatIn(BaseModel):
@@ -46,6 +47,11 @@ class TextIn(BaseModel):
     text: str
 
 
+class PolicyIn(BaseModel):
+    title: str
+    content: str
+
+
 class StatusIn(BaseModel):
     status: str
     note: str | None = None
@@ -57,7 +63,9 @@ def create_app(settings: Settings | None = None, agent: AgentPort | None = None)
     db.init()
     if settings.seed_demo_orders:
         OrderRepo(db).seed_demo()
-    svc = ChatService(db, settings, agent or build_agent(settings, db))
+    kb = PolicyRepo(db)
+    kb.seed_defaults()
+    svc = ChatService(db, settings, agent or build_agent(settings, db, kb))
     svc.ensure_bootstrap_admin()
 
     app = FastAPI(title="ResolveAI", docs_url=None, redoc_url=None, openapi_url=None)
@@ -152,10 +160,21 @@ def create_app(settings: Settings | None = None, agent: AgentPort | None = None)
     def dashboard(date_from: str | None = None, date_to: str | None = None, _: dict = Depends(staff)):
         return svc.dashboard(date_from, date_to)
 
-    @app.api_route("/api/admin/kb/docs", methods=["GET", "POST"])
-    @app.api_route("/api/admin/kb/docs/{doc_id}", methods=["PUT", "DELETE"])
-    def kb(doc_id: str | None = None, _: dict = Depends(staff)):
-        svc.kb_not_implemented()
+    @app.get("/api/admin/kb/docs")
+    def kb_list(_: dict = Depends(staff)):
+        return {"items": kb.list()}
+
+    @app.post("/api/admin/kb/docs")
+    def kb_create(body: PolicyIn, _: dict = Depends(staff)):
+        return kb.create(body.title, body.content)
+
+    @app.put("/api/admin/kb/docs/{doc_id}")
+    def kb_update(doc_id: int, body: PolicyIn, _: dict = Depends(staff)):
+        return kb.update(doc_id, body.title, body.content)
+
+    @app.delete("/api/admin/kb/docs/{doc_id}")
+    def kb_delete(doc_id: int, _: dict = Depends(staff)):
+        return kb.delete(doc_id)
 
     # ---------------- giao diện tĩnh (đặt sau cùng để không che /api)
     app.mount("/admin", StaticFiles(directory=WEB_DIR / "admin", html=True), name="admin")

@@ -2,13 +2,13 @@
 (function () {
   "use strict";
   var $ = function (id) { return document.getElementById(id); };
-  var cur = { queue: null, ticket: null, history: null }, tab = "queue", timer = null;
+  var cur = { queue: null, ticket: null, history: null, kb: null }, tab = "queue", timer = null;
   var ROLE = { customer: "Khách", ai: "AI", staff: "Nhân viên", system: "" };
   var NEXT = { "Mới": "Đang xử lý", "Đang xử lý": "Đã hoàn thành" };
 
   function el(tag, cls, text) { var e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; }
   function clear(n) { while (n.firstChild) n.removeChild(n.firstChild); }
-  function toast(t) { var b = $("toast"); b.textContent = t; b.hidden = false; setTimeout(function () { b.hidden = true; }, 4000); }
+  function toast(t, ok) { var b = $("toast"); b.textContent = t; b.className = "toast" + (ok ? " ok" : ""); b.hidden = false; setTimeout(function () { b.hidden = true; }, 4000); }
 
   function api(method, url, body) {
     return fetch(url, { method: method, headers: body ? { "Content-Type": "application/json" } : {}, body: body ? JSON.stringify(body) : undefined, credentials: "same-origin" })
@@ -39,6 +39,7 @@
     tab = t;
     ["queue", "tickets", "history", "dash", "kb"].forEach(function (n) { $("tab-" + n).hidden = n !== t; });
     Array.prototype.forEach.call($("tabs").children, function (b) { b.classList.toggle("on", b.dataset.tab === t); });
+    if (t === "kb") loadKb();
     refresh(); stop(); timer = setInterval(refresh, 5000);
   }
   function refresh() {
@@ -151,6 +152,35 @@
     }).catch(fail);
   }
   $("hStatus").addEventListener("change", loadHistory);
+
+  // ---- Chính sách (kho tri thức của chatbot)
+  function kbForm(d) {
+    cur.kb = d ? d.id : null;
+    $("kbTitle").value = d ? d.title : ""; $("kbContent").value = d ? d.content : "";
+    $("kbHead").textContent = d ? "Sửa chính sách" : "Thêm chính sách mới"; $("kbDel").hidden = !d;
+  }
+  function loadKb() {
+    api("GET", "/api/admin/kb/docs").then(function (d) {
+      var box = $("kbList"); clear(box);
+      if (!d.items.length) box.appendChild(el("p", "muted", "Chưa có chính sách nào."));
+      d.items.forEach(function (it) {
+        var n = el("div", "item" + (it.id === cur.kb ? " sel" : ""));
+        n.appendChild(el("div", null, it.title)); n.appendChild(el("small", "snip", it.content));
+        n.addEventListener("click", function () { kbForm(it); loadKb(); });
+        box.appendChild(n);
+      });
+    }).catch(fail);
+  }
+  $("kbNew").addEventListener("click", function () { kbForm(null); loadKb(); });
+  $("kbSave").addEventListener("click", function () {
+    var body = { title: $("kbTitle").value, content: $("kbContent").value }, id = cur.kb;
+    api(id ? "PUT" : "POST", "/api/admin/kb/docs" + (id ? "/" + id : ""), body)
+      .then(function (r) { toast("Đã lưu chính sách.", true); cur.kb = r.id; $("kbHead").textContent = "Sửa chính sách"; $("kbDel").hidden = false; loadKb(); }).catch(fail);
+  });
+  $("kbDel").addEventListener("click", function () {
+    if (!cur.kb || !confirm("Xóa chính sách này? Chatbot sẽ không còn trả lời theo nội dung đó.")) return;
+    api("DELETE", "/api/admin/kb/docs/" + cur.kb).then(function () { toast("Đã xóa.", true); kbForm(null); loadKb(); }).catch(fail);
+  });
 
   // ---- Thống kê
   function loadDash() {

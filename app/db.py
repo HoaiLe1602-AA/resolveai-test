@@ -82,6 +82,12 @@ CREATE TABLE IF NOT EXISTS shop_order(
   created_at TEXT NOT NULL,
   updated_at TEXT NOT NULL
 );
+CREATE TABLE IF NOT EXISTS policy_doc(
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  title TEXT NOT NULL,
+  content TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+);
 CREATE TABLE IF NOT EXISTS staff_session(
   token_hash TEXT PRIMARY KEY,
   staff_id INTEGER NOT NULL REFERENCES staff(id),

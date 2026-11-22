@@ -25,7 +25,7 @@
       <button data-tab="tickets">Ticket</button>
       <button data-tab="history">Lịch sử</button>
       <button data-tab="dash">Thống kê</button>
-      <button data-tab="kb">Tài liệu KB</button>
+      <button data-tab="kb">Chính sách</button>
     </nav>
     <button id="logout" type="button">Đăng xuất</button>
   </header>
@@ -47,7 +47,18 @@
     <div class="split"><div class="list" id="historyList"></div><div class="conv" id="historyDetail"><p class="muted">Chọn một phiên.</p></div></div>
   </section>
   <section id="tab-dash" class="tab" hidden><div id="dash" class="cards"></div></section>
-  <section id="tab-kb" class="tab" hidden><p class="muted">Quản lý kho tài liệu KB chưa được hiện thực trong khung mẫu (thuộc module RAG).</p></section>
+  <section id="tab-kb" class="tab" hidden>
+    <p class="muted">Chatbot dùng các chính sách này để trả lời khách. Thêm hoặc sửa xong bấm Lưu, có hiệu lực ngay ở tin nhắn tiếp theo.</p>
+    <div class="split">
+      <div class="list"><button id="kbNew" type="button" class="primary">+ Thêm chính sách</button><div class="list" id="kbList"></div></div>
+      <div class="conv">
+        <h3 id="kbHead">Thêm chính sách mới</h3>
+        <label>Tiêu đề<input id="kbTitle" maxlength="200" placeholder="Ví dụ: Chính sách đổi hàng"></label>
+        <label>Nội dung<textarea id="kbContent" rows="12" maxlength="6000" placeholder="Nhập nội dung chính sách đầy đủ, rõ ràng. Chatbot sẽ trả lời theo đúng nội dung này."></textarea></label>
+        <div class="row"><button id="kbSave" type="button" class="primary">Lưu</button><button id="kbDel" type="button" hidden>Xóa</button></div>
+      </div>
+    </div>
+  </section>
 </div>
 <script src="admin.js"></script>
 </body>

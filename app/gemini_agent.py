@@ -71,8 +71,10 @@ def http_transport(api_key: str, model: str, timeout: float = 25.0) -> Callable[
 
 
 class GeminiAgent:
-    def __init__(self, orders: OrderRepo, transport: Callable[[dict], dict], hotline: str = ""):
+    def __init__(self, orders: OrderRepo, transport: Callable[[dict], dict], hotline: str = "",
+                 policy_provider: Callable[[], str] | None = None):
         self.orders, self.transport, self.hotline = orders, transport, hotline
+        self.policy_provider = policy_provider
         self.stub = StubAgent()
 
     # ------------------------------------------------------------------ một lượt
@@ -144,7 +146,7 @@ class GeminiAgent:
 
     # ------------------------------------------------------------------ tiện ích
     def _payload(self, contents: list, in_hours: bool) -> dict:
-        return {"systemInstruction": {"parts": [{"text": build_system_prompt(self.hotline, in_hours)}]},
+        return {"systemInstruction": {"parts": [{"text": build_system_prompt(self.hotline, in_hours, self.policy_provider() if self.policy_provider else None)}]},
                 "contents": contents, "tools": TOOLS,
                 "generationConfig": {"temperature": 0.3, "maxOutputTokens": 700}}
 
