@@ -1,4 +1,4 @@
-"""API thêm/sửa/xóa chính sách thủ công.
+"""API thêm/sửa/xóa chính sách thủ công
 """
 from __future__ import annotations
 
@@ -12,7 +12,7 @@ from typing import Optional
 from fastapi import APIRouter, Header, HTTPException
 from pydantic import BaseModel
 
-POLICY_DIR = Path(os.getenv("POLICY_DIR") or Path(__file__).resolve().parent.parent / "data" / "policies")
+POLICY_DIR = Path(os.getenv("POLICIES_DIR") or os.getenv("POLICY_DIR") or Path(__file__).resolve().parent.parent / "data" / "policies")
 SLUG_RE = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
 
 
