@@ -6,7 +6,6 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY app app
 COPY web web
 COPY scripts scripts
-COPY data data
 RUN useradd -r -u 10001 appuser && mkdir -p /var/lib/resolveai && chown appuser /var/lib/resolveai
 USER appuser
 EXPOSE 8000

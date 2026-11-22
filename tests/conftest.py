@@ -37,7 +37,7 @@ def clock():
 def make(tmp_path, clock):
     def _make(agent=None, **kw):
         s = Settings(data_dir=tmp_path, secret_key="k", admin_user="admin", admin_password="pw12345",
-                     hotline="1900-TEST", **kw)
+                     hotline="1900-TEST", admin_auth=True, **kw)
         db = Database(s.app_db_path)
         db.init()
         svc = ChatService(db, s, agent or StubAgent(), now_fn=clock, sleep_fn=lambda _: None)

@@ -1,0 +1,143 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SAVANI - Thời trang nam nữ, trẻ em</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;700;900&display=swap" rel="stylesheet">
+<style>
+*{box-sizing:border-box}
+:root{--ink:#141414;--red:#d4141c;--mute:#6b6b6b;--tile:#f3f0ec;--line:#e8e6e3}
+body{margin:0;font:15px/1.5 "Be Vietnam Pro",system-ui,"Segoe UI",Roboto,sans-serif;color:var(--ink);background:#fff}
+a{color:inherit;text-decoration:none}
+.promo{background:#000;color:var(--red);text-align:center;padding:14px 48px;font-weight:500;position:relative}
+.promo button{position:absolute;right:16px;top:50%;translate:0 -50%;width:30px;height:30px;border-radius:50%;border:0;background:#555;color:#fff;cursor:pointer;font-size:18px}
+header.top{position:sticky;top:0;z-index:20;background:#fff;border-bottom:1px solid var(--line);display:flex;align-items:center;gap:36px;padding:10px 6vw}
+.logo{font-weight:900;letter-spacing:.32em;font-size:20px;border-bottom:3px solid var(--ink);padding:0 0 2px .32em}
+nav.main{display:flex;gap:26px;flex:1;flex-wrap:wrap}
+nav.main a{font-size:16px;padding:6px 0}nav.main a:hover{color:var(--red)}
+.icons{display:flex;gap:18px;align-items:center}
+.icons svg{width:26px;height:26px;stroke:var(--ink);fill:none;stroke-width:1.8}
+.cart{position:relative}.cart b{position:absolute;top:-8px;right:-10px;background:var(--red);color:#fff;border-radius:50%;width:20px;height:20px;font-size:12px;display:grid;place-items:center}
+.hero{background:radial-gradient(120% 90% at 20% 40%,#2a0507,#000 70%);color:#fff;display:grid;grid-template-columns:1.05fr 1fr;align-items:center;min-height:min(78vh,640px);padding:0 6vw;overflow:hidden}
+.hero h1{margin:0;line-height:.88;font-weight:900;font-size:clamp(64px,11vw,150px)}
+.hero h1 em{display:block;color:var(--red);font-style:italic;letter-spacing:-.04em}
+.hero h1 span{display:block;font-size:.8em;letter-spacing:-.02em}
+.plate{display:inline-block;margin-top:22px;padding:8px 34px 8px 18px;background:linear-gradient(90deg,#7d0a10,#d4141c);font-weight:900;font-size:clamp(28px,4.6vw,56px)}
+.hero p{margin:14px 0 0;font-weight:700;font-size:clamp(16px,2vw,24px)}.hero p b{font-size:2.4em;font-weight:900;vertical-align:middle}
+.bags{position:relative;height:min(64vh,520px)}
+.bag{position:absolute;background:var(--red);display:grid;place-items:center;font-weight:900;color:#fff;letter-spacing:.12em;box-shadow:inset -18px -18px 40px #0003}
+.bag::before{content:"";position:absolute;top:-34px;left:22%;width:56%;height:40px;border:5px solid var(--red);border-bottom:0;border-radius:40px 40px 0 0}
+.bag.a{width:56%;height:64%;left:6%;top:12%;rotate:-8deg;font-size:clamp(18px,3vw,38px)}
+.bag.b{width:62%;height:56%;right:-6%;bottom:-4%;rotate:6deg;font-size:clamp(40px,7vw,96px)}
+.perks{display:grid;grid-template-columns:repeat(4,1fr);gap:24px;padding:34px 6vw;border-bottom:1px solid var(--line)}
+.perks h3{margin:0 0 2px;font-size:16px;text-transform:uppercase}.perks p{margin:0;color:var(--mute)}
+section.shelf{padding:44px 6vw}
+.shelf-head{display:flex;align-items:end;justify-content:space-between;gap:16px;margin-bottom:22px;flex-wrap:wrap}
+.shelf-head h2{margin:0;font-size:30px}
+.tabs{display:flex;gap:8px}.tabs button{border:1px solid var(--ink);background:#fff;border-radius:99px;padding:7px 18px;font:inherit;cursor:pointer}
+.tabs button[aria-pressed=true]{background:var(--ink);color:#fff}
+.grid{display:grid;grid-template-columns:repeat(4,1fr);gap:26px 20px}
+.card .pic{background:var(--tile);aspect-ratio:3/4;display:grid;place-items:center;position:relative}
+.card .pic svg{width:68%}.card .tag{position:absolute;top:10px;left:10px;background:var(--red);color:#fff;font-size:12px;font-weight:700;padding:3px 8px}
+.card h3{margin:10px 0 2px;font-size:15px;font-weight:500}
+.price{font-weight:700}.price s{color:var(--mute);font-weight:400;margin-left:8px}
+.sizes{display:flex;gap:6px;margin:8px 0}.sizes span{border:1px solid var(--line);font-size:12px;padding:1px 8px}
+.ask{border:0;background:none;padding:0;color:var(--red);font:inherit;font-weight:500;cursor:pointer;text-decoration:underline;text-underline-offset:3px}
+footer{background:#000;color:#cfcfcf;padding:36px 6vw;display:grid;grid-template-columns:1.2fr 1fr 1fr;gap:30px}
+footer h4{margin:0 0 8px;color:#fff}footer p{margin:2px 0}
+@media(max-width:900px){.hero{grid-template-columns:1fr;padding-top:36px}.bags{height:300px}.perks{grid-template-columns:1fr 1fr}.grid{grid-template-columns:repeat(2,1fr)}footer{grid-template-columns:1fr}header.top{gap:14px;flex-wrap:wrap}nav.main{order:3;flex-basis:100%;gap:16px}}
+</style>
+</head>
+<body>
+<div class="promo" id="promo">BLACK FRIDAY MUA 1 TẶNG 1 - HÀNG NGÀN SẢN PHẨM 96K - VOUCHER TỚI 200K - MIỄN PHÍ SHIP VỚI ĐƠN HÀNG TỪ 500K<button aria-label="Đóng thông báo" onclick="document.getElementById('promo').hidden=true">×</button></div>
+<header class="top">
+  <a class="logo" href="/" aria-label="Savani, về trang chủ">SAVANI</a>
+  <nav class="main" aria-label="Danh mục"><a href="#">Trang chủ</a><a href="#">Hàng mới về</a><a href="#">Ưu đãi Cực Hot</a><a href="#nam">Nam</a><a href="#nu">Nữ</a><a href="#">Trẻ Em</a></nav>
+  <div class="icons">
+    <svg viewBox="0 0 24 24" aria-label="Tìm kiếm"><circle cx="11" cy="11" r="7"/><path d="m20 20-4-4"/></svg>
+    <svg viewBox="0 0 24 24" aria-label="Tài khoản"><circle cx="12" cy="8" r="4"/><path d="M4 21c1-5 15-5 16 0"/></svg>
+    <span class="cart"><svg viewBox="0 0 24 24" aria-label="Giỏ hàng"><path d="M5 8h14l-1 12H6zM9 8a3 3 0 0 1 6 0"/></svg><b>0</b></span>
+  </div>
+</header>
+<main>
+  <div class="hero">
+    <div><h1><em>BLACK</em><span>FRIDAY</span></h1><div class="plate">MUA 1 TẶNG 1</div><p>HÀNG NGÀN SẢN PHẨM <b>96K</b></p></div>
+    <div class="bags" aria-hidden="true"><div class="bag a">SAVANI</div><div class="bag b">SALE</div></div>
+  </div>
+  <div class="perks">
+    <div><h3>Miễn phí giao hàng đơn từ 500K</h3><p>Giao hàng toàn quốc</p></div>
+    <div><h3>Kiểm tra hàng khi thanh toán</h3><p>Nhận hàng, kiểm tra ưng ý mới thanh toán</p></div>
+    <div><h3>Đổi hàng linh hoạt</h3><p>Đổi hàng lên tới 30 ngày kể từ ngày mua</p></div>
+    <div><h3>Tư vấn nhanh chóng</h3><p>Hỗ trợ 24/7 qua hotline: 0888.566.599</p></div>
+  </div>
+  <section class="shelf" id="sp">
+    <div class="shelf-head"><h2>Đang giảm giá</h2>
+      <div class="tabs" role="group" aria-label="Lọc theo giới tính"><button aria-pressed="true" data-c="all">Tất cả</button><button aria-pressed="false" data-c="nam">Nam</button><button aria-pressed="false" data-c="nu">Nữ</button></div></div>
+    <div class="grid" id="grid"></div>
+  </section>
+</main>
+<footer>
+  <div><h4>SAVANI</h4><p>Thời trang nam, nữ, trẻ em.</p><p>Trang minh họa: ảnh và sản phẩm là dữ liệu mẫu.</p></div>
+  <div><h4>Hỗ trợ khách hàng</h4><p>Hotline: 0888.566.599</p><p>Chính sách đổi hàng 30 ngày</p><p>Chat với trợ lý ở góc phải màn hình</p></div>
+  <div><h4>Giờ làm việc CSKH</h4><p>08:00 - 17:30, Thứ Hai đến Thứ Bảy</p></div>
+</footer>
+
+<script>
+(function () {
+  var SHAPES = {
+    shirt: "M30 18 42 12Q50 22 58 12L70 18 90 34 80 46 70 40V88H30V40L20 46 10 34Z",
+    jacket: "M28 16 42 10H58L72 16 92 36 82 50 72 44V90H28V44L18 50 8 36ZM50 14V90",
+    pants: "M32 12H68L72 92H54L50 42 46 92H28Z",
+    skirt: "M36 14H64L84 90H16Z",
+    dress: "M38 8H44Q50 18 56 8H62L66 38 86 92H14L34 38Z"
+  };
+  var P = [
+    ["Áo polo nam cafe", 189000, 245000, "nam", "shirt", "#7a5230"],
+    ["Áo sơ mi nam Oxford", 249000, 329000, "nam", "shirt", "#9db7d0"],
+    ["Áo khoác bomber", 459000, 599000, "nam", "jacket", "#3d4a3a"],
+    ["Quần tây nam ống đứng", 349000, 449000, "nam", "pants", "#4a4a4f"],
+    ["Áo len nữ cổ tròn kẻ sọc", 299000, 399000, "nu", "shirt", "#8c1d2c", true],
+    ["Chân váy chữ A", 229000, 299000, "nu", "skirt", "#1c1c1c"],
+    ["Đầm midi", 399000, 520000, "nu", "dress", "#c9a9a0"],
+    ["Quần jean nữ ống suông", 96000, 349000, "nu", "pants", "#5b7ca6"]
+  ];
+  var grid = document.getElementById("grid"), NS = "http://www.w3.org/2000/svg";
+  function money(n) { return n.toLocaleString("vi-VN") + "đ"; }
+  function el(t, c, x) { var e = document.createElement(t); if (c) e.className = c; if (x != null) e.textContent = x; return e; }
+  function garment(p) {
+    var s = document.createElementNS(NS, "svg"); s.setAttribute("viewBox", "0 0 100 100"); s.setAttribute("aria-hidden", "true");
+    var path = document.createElementNS(NS, "path"); path.setAttribute("d", SHAPES[p[4]]); path.setAttribute("fill", p[5]);
+    path.setAttribute("stroke", "#0003"); path.setAttribute("stroke-width", "1.2"); path.setAttribute("stroke-linejoin", "round");
+    s.appendChild(path);
+    if (p[6]) {  // họa tiết kẻ sọc, cắt theo hình áo
+      var cp = document.createElementNS(NS, "clipPath"), cpp = document.createElementNS(NS, "path"), g = document.createElementNS(NS, "g");
+      cp.setAttribute("id", "stripe-clip"); cpp.setAttribute("d", SHAPES[p[4]]); cp.appendChild(cpp); s.appendChild(cp);
+      g.setAttribute("clip-path", "url(#stripe-clip)");
+      for (var y = 22; y < 88; y += 9) { var r = document.createElementNS(NS, "rect"); r.setAttribute("x", 0); r.setAttribute("y", y); r.setAttribute("width", 100); r.setAttribute("height", 3.6); r.setAttribute("fill", "#fff"); r.setAttribute("opacity", ".85"); g.appendChild(r); }
+      s.appendChild(g);
+    }
+    return s;
+  }
+  P.forEach(function (p) {
+    var c = el("article", "card"); c.dataset.c = p[3];
+    var pic = el("div", "pic"); pic.appendChild(garment(p)); pic.appendChild(el("span", "tag", "-" + Math.round((1 - p[1] / p[2]) * 100) + "%"));
+    var pr = el("div", "price", money(p[1])); pr.appendChild(el("s", null, money(p[2])));
+    var sz = el("div", "sizes"); (p[3] === "nam" ? ["M", "L", "XL"] : ["S", "M", "L"]).forEach(function (x) { sz.appendChild(el("span", null, x)); });
+    var ask = el("button", "ask", "Hỏi chatbot chọn size"); ask.type = "button";
+    ask.addEventListener("click", function () { window.SavaniChat && window.SavaniChat.open("Tư vấn size giúp mình cho " + p[0]); });
+    [pic, el("h3", null, p[0]), pr, sz, ask].forEach(function (n) { c.appendChild(n); }); grid.appendChild(c);
+  });
+  var tabs = document.querySelectorAll(".tabs button");
+  Array.prototype.forEach.call(tabs, function (b) {
+    b.addEventListener("click", function () {
+      Array.prototype.forEach.call(tabs, function (x) { x.setAttribute("aria-pressed", x === b); });
+      Array.prototype.forEach.call(grid.children, function (c) { c.hidden = b.dataset.c !== "all" && c.dataset.c !== b.dataset.c; });
+    });
+  });
+})();
+</script>
+<script src="/widget/chatbot.js" defer></script>
+</body>
+</html>
