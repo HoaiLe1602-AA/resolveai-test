@@ -1,86 +1,186 @@
-"""Tra cứu đơn hàng. Hiện đọc bảng shop_order (SQLite) với vài đơn MẪU.
-
-Muốn nối đơn hàng thật của Savani (Haravan, Shopify, KiotViet...): viết lớp khác có cùng
-phương thức `lookup(code, phone_last4)` rồi truyền vào GeminiAgent ở build_agent().
-Bảo mật: chỉ trả đơn khi KHỚP cả mã đơn lẫn 4 số cuối SĐT; sai thì không nói là sai mã hay sai SĐT.
+"""Đơn hàng giả định + tra cứu cho chatbot ResolveAI.
 """
 from __future__ import annotations
 
-import hmac
-import json
 import re
-from datetime import datetime, timezone
+import unicodedata
+from typing import Optional
 
-from .db import Database
+SHIP_FEE = 30000
+
+
+def _order(code, phone, name, items, status, created, carrier=None, tracking=None,
+           eta=None, address="", note="", ship=SHIP_FEE):
+    """items: danh sách (tên sản phẩm, đơn giá, số lượng)."""
+    lines = [{"name": n, "price": p, "qty": q} for n, p, q in items]
+    subtotal = sum(i["price"] * i["qty"] for i in lines)
+    return {
+        "code": code, "phone": phone, "customer": name, "items": lines,
+        "subtotal": subtotal, "ship": ship, "total": subtotal + ship,
+        "status": status, "created": created, "carrier": carrier,
+        "tracking": tracking, "eta": eta, "address": address, "note": note,
+    }
+
 
 DEMO_ORDERS = [
-    ("SV100001", "5678", "Nguyễn Văn An", "Đang giao",
-     [{"name": "Áo polo nam cafe", "size": "M", "qty": 1, "price": 189000}], 189000,
-     "Thanh toán khi nhận hàng (COD)", "GHN", "GHN123456789", "Dự kiến giao ngày 24/11/2026", "2026-11-20"),
-    ("SV100002", "1234", "Trần Thị Bích", "Đã giao",
-     [{"name": "Áo len nữ cổ tròn kẻ sọc", "size": "S", "qty": 1, "price": 299000},
-      {"name": "Chân váy chữ A", "size": "S", "qty": 1, "price": 229000}], 528000,
-     "Chuyển khoản", "GHTK", "GHTK987654321", "Giao thành công ngày 15/11/2026", "2026-11-12"),
-    ("SV100003", "9999", "Lê Minh Quân", "Đang chuẩn bị hàng",
-     [{"name": "Áo khoác bomber", "size": "L", "qty": 1, "price": 459000},
-      {"name": "Quần tây nam ống đứng", "size": "L", "qty": 1, "price": 349000}], 808000,
-     "Chuyển khoản", None, None, "Kho đang đóng gói, thường giao đi trong 24 giờ", "2026-11-23"),
-    ("SV100004", "4321", "Phạm Thu Hà", "Đã hủy",
-     [{"name": "Đầm midi", "size": "M", "qty": 1, "price": 399000}], 399000,
-     "Thanh toán khi nhận hàng (COD)", None, None, "Đơn đã hủy theo yêu cầu của khách", "2026-11-18"),
-    ("SV100005", "2468", "Hoàng Gia Bảo", "Chờ xác nhận",
-     [{"name": "Áo sơ mi nam Oxford", "size": "L", "qty": 2, "price": 249000}], 498000,
-     "Thanh toán khi nhận hàng (COD)", None, None, "Đơn vừa đặt, nhân viên sẽ gọi xác nhận trong ngày", "2026-11-23"),
-    ("SV100006", "1357", "Đỗ Khánh Linh", "Đang giao",
-     [{"name": "Quần jean nữ ống suông", "size": "M", "qty": 1, "price": 96000},
-      {"name": "Áo len nữ cổ tròn kẻ sọc", "size": "M", "qty": 1, "price": 299000}], 395000,
-     "Chuyển khoản", "Viettel Post", "VTP556677889", "Đang ở bưu cục trung chuyển, dự kiến giao ngày 25/11/2026", "2026-11-21"),
-    ("SV100007", "8080", "Vũ Đức Thịnh", "Đã giao",
-     [{"name": "Áo polo nam cafe", "size": "XL", "qty": 1, "price": 189000}], 189000,
-     "Thanh toán khi nhận hàng (COD)", "GHN", "GHN445566778", "Giao thành công ngày 08/10/2026 (đã quá 30 ngày đổi hàng)", "2026-10-05"),
-    ("SV100008", "7777", "Bùi Mai Phương", "Hoàn trả",
-     [{"name": "Đầm midi", "size": "S", "qty": 1, "price": 399000}], 399000,
-     "Chuyển khoản", "GHTK", "GHTK112233445", "Đã nhận lại hàng, đang xử lý hoàn tiền", "2026-11-05"),
-    ("SV100009", "3690", "Ngô Quang Huy", "Đã giao",
-     [{"name": "Áo khoác bomber", "size": "XL", "qty": 1, "price": 459000},
-      {"name": "Quần tây nam ống đứng", "size": "XL", "qty": 1, "price": 349000},
-      {"name": "Áo polo nam cafe", "size": "XL", "qty": 1, "price": 189000}], 997000,
-     "Chuyển khoản", "GHN", "GHN998877665", "Giao thành công ngày 20/11/2026, đơn trên 500K được miễn phí ship", "2026-11-17"),
-    ("SV100010", "0001", "Lý Hải Yến", "Đang chuẩn bị hàng",
-     [{"name": "Chân váy chữ A", "size": "M", "qty": 1, "price": 229000}], 229000,
-     "Thanh toán khi nhận hàng (COD)", None, None, "Kho đang đóng gói, thường giao đi trong 24 giờ", "2026-11-23"),
+    _order("DH1001", "0901234567", "Nguyễn Văn An",
+           [("Áo thun nam basic size M", 150000, 2)], "Đang giao", "2026-11-21",
+           "GHN", "GHN4829301", "2026-11-25", "12 Lê Lợi, Q.1, TP.HCM"),
+    _order("DH1002", "0912345678", "Trần Thị Bình",
+           [("Quần jean nữ size 28", 420000, 1)], "Đã giao", "2026-11-14",
+           "GHTK", "GHTK7731920", "2026-11-20", "45 Nguyễn Trãi, Thanh Xuân, Hà Nội",
+           "Giao thành công ngày 2026-11-20."),
+    _order("DH1003", "0923456789", "Lê Hoàng Cường",
+           [("Giày sneaker nam size 42", 890000, 1)], "Chờ xác nhận", "2026-11-23",
+           eta="2026-11-28", address="88 Trần Phú, Hải Châu, Đà Nẵng"),
+    _order("DH1004", "0934567890", "Phạm Minh Dũng",
+           [("Áo khoác gió nam size L", 560000, 1)], "Đang đóng gói", "2026-11-22",
+           eta="2026-11-26", address="7 Hùng Vương, Ninh Kiều, Cần Thơ"),
+    _order("DH1005", "0945678901", "Võ Thu Hà",
+           [("Váy liền nữ size S", 480000, 1), ("Túi tote vải canvas", 190000, 1)],
+           "Đang giao", "2026-11-20", "Viettel Post", "VTP5520184", "2026-11-24",
+           "23 Phan Chu Trinh, TP. Huế"),
+    _order("DH1006", "0956789012", "Đặng Quốc Huy",
+           [("Áo sơ mi nam size XL", 350000, 1)], "Đã hủy", "2026-11-18",
+           address="9 Lý Thường Kiệt, Hà Nội",
+           note="Khách yêu cầu hủy ngày 2026-11-19. Tiền hoàn về trong 3-5 ngày làm việc."),
+    _order("DH1007", "0967890123", "Bùi Ngọc Lan",
+           [("Chân váy nữ size M", 290000, 1)], "Hoàn trả", "2026-11-08",
+           "GHN", "GHN4711022", "2026-11-12", "31 Hai Bà Trưng, Nha Trang",
+           "Đã nhận lại hàng trả, đang xử lý hoàn tiền."),
+    _order("DH1008", "0978901234", "Ngô Thanh Phong",
+           [("Áo hoodie unisex size L", 420000, 2)], "Đã giao", "2026-11-10",
+           "GHTK", "GHTK7690455", "2026-11-15", "5 Võ Văn Tần, Q.3, TP.HCM"),
+    _order("DH1009", "0989012345", "Hoàng Mỹ Linh",
+           [("Giày cao gót nữ size 37", 650000, 1)], "Đang giao", "2026-11-19",
+           "GHN", "GHN4830777", "2026-11-25", "64 Điện Biên Phủ, Bình Thạnh, TP.HCM",
+           "Giao lần 1 chưa thành công do không liên lạc được, shipper sẽ giao lại."),
+    _order("DH1010", "0390123456", "Đỗ Anh Khoa",
+           [("Quần short nam size M", 180000, 3)], "Chờ xác nhận", "2026-11-23",
+           eta="2026-11-27", address="102 Nguyễn Huệ, Biên Hòa, Đồng Nai"),
+    _order("DH1011", "0381234567", "Mai Phương Thảo",
+           [("Áo len nữ size M", 380000, 1)], "Đã giao", "2026-11-09",
+           "Viettel Post", "VTP5498801", "2026-11-13", "18 Trần Hưng Đạo, Hải Phòng"),
+    _order("DH1012", "0372345678", "Trịnh Văn Đức",
+           [("Balo laptop chống sốc", 720000, 1)], "Đang đóng gói", "2026-11-22",
+           eta="2026-11-27", address="56 Quang Trung, Vinh, Nghệ An"),
+    _order("DH1013", "0363456789", "Lý Bảo Châu",
+           [("Áo polo nam size L", 270000, 2), ("Quần kaki nam size 32", 390000, 1)],
+           "Đang giao", "2026-11-21", "GHTK", "GHTK7745310", "2026-11-25",
+           "27 Lê Duẩn, Buôn Ma Thuột, Đắk Lắk"),
+    _order("DH1014", "0354567890", "Vũ Khánh Vy",
+           [("Đầm công sở nữ size M", 520000, 1)], "Đã giao", "2026-11-05",
+           "GHN", "GHN4688120", "2026-11-09", "14 Nguyễn Văn Cừ, Quy Nhơn, Bình Định"),
+    _order("DH1015", "0345678901", "Phan Đức Thịnh",
+           [("Giày chạy bộ nam size 41", 950000, 1), ("Tất thể thao (3 đôi)", 90000, 1)],
+           "Đang đóng gói", "2026-11-23", eta="2026-11-27",
+           address="3 Bạch Đằng, Hạ Long, Quảng Ninh"),
 ]
 
-
-def normalize_code(code: str) -> str:
-    c = re.sub(r"[^A-Z0-9]", "", (code or "").upper())
-    return "SV" + c if c.isdigit() and len(c) == 6 else c
+_BY_CODE = {o["code"]: o for o in DEMO_ORDERS}
 
 
-def last4(phone: str) -> str:
-    return re.sub(r"\D", "", phone or "")[-4:]
+# ---------------------------------------------------------------- tiện ích văn bản
+def _plain(text: str) -> str:
+    """Chữ thường, bỏ dấu tiếng Việt (để so khớp từ khóa)."""
+    text = text.lower().replace("đ", "d")
+    return "".join(c for c in unicodedata.normalize("NFD", text) if unicodedata.category(c) != "Mn")
 
 
-class OrderRepo:
-    def __init__(self, db: Database):
-        self.db = db
+def money(v: int) -> str:
+    return f"{v:,}".replace(",", ".") + "đ"
 
-    def lookup(self, code: str, phone: str) -> dict | None:
-        with self.db.conn() as c:
-            r = c.execute("SELECT * FROM shop_order WHERE code=?", (normalize_code(code),)).fetchone()
-        l4 = last4(phone)
-        if not r or len(l4) != 4 or not hmac.compare_digest(l4, r["phone_last4"]):
-            return None
-        return {"code": r["code"], "status": r["status"], "items": json.loads(r["items_json"]),
-                "total": r["total"], "payment": r["payment"], "carrier": r["carrier"],
-                "tracking": r["tracking"], "note": r["note"], "created_at": r["created_at"][:10]}
 
-    def seed_demo(self) -> None:
-        now = datetime.now(timezone.utc).isoformat(timespec="seconds")
-        with self.db.tx() as c:
-            for (code, l4, name, st, items, total, pay, car, trk, note, created) in DEMO_ORDERS:
-                c.execute("INSERT OR IGNORE INTO shop_order(code, phone_last4, customer_name, status, items_json,"
-                          " total, payment, carrier, tracking, note, created_at, updated_at)"
-                          " VALUES (?,?,?,?,?,?,?,?,?,?,?,?)",
-                          (code, l4, name, st, json.dumps(items, ensure_ascii=False), total, pay, car, trk,
-                           note, created, now))
+ORDER_KEYWORDS = (
+    "don hang", "ma don", "tra cuu don", "van don", "kiem tra don", "tinh trang don",
+    "trang thai don", "don cua toi", "don cua minh", "hang cua toi", "hang cua minh",
+    "bao gio nhan", "khi nao nhan", "bao gio giao", "khi nao giao", "giao chua",
+    "da giao chua", "toi dat hang", "minh dat hang", "theo doi don",
+)
+
+
+def extract_order_code(text: str) -> Optional[str]:
+    m = re.search(r"\bDH[\s\-]?(\d{3,6})\b", text, re.IGNORECASE)
+    return f"DH{m.group(1)}" if m else None
+
+
+def extract_phone(text: str) -> Optional[str]:
+    for m in re.finditer(r"(?<!\d)(?:\+84|0)[\d\s.\-]{8,12}\d(?!\d)", text):
+        digits = re.sub(r"\D", "", m.group())
+        if digits.startswith("84"):
+            digits = "0" + digits[2:]
+        if len(digits) >= 10:
+            return digits[:10]
+    return None
+
+
+def is_order_query(text: str) -> bool:
+    p = _plain(text)
+    return any(k in p for k in ORDER_KEYWORDS)
+
+
+# ---------------------------------------------------------------- tra cứu
+def find_order(code: str, phone: str) -> Optional[dict]:
+    """Chỉ trả đơn khi mã đơn VÀ số điện thoại cùng khớp (tránh lộ đơn của người khác)."""
+    order = _BY_CODE.get((code or "").upper())
+    if order and order["phone"] == phone:
+        return order
+    return None
+
+
+def format_order(o: dict) -> str:
+    lines = [f"Đơn {o['code']} của {o['customer']}", f"Trạng thái: {o['status']}", "Sản phẩm:"]
+    for i in o["items"]:
+        lines.append(f"- {i['name']} x{i['qty']}: {money(i['price'] * i['qty'])}")
+    lines.append(f"Phí vận chuyển: {money(o['ship'])}")
+    lines.append(f"Tổng thanh toán: {money(o['total'])}")
+    lines.append(f"Ngày đặt: {o['created']}")
+    if o["carrier"]:
+        lines.append(f"Đơn vị vận chuyển: {o['carrier']} (mã vận đơn {o['tracking']})")
+    if o["eta"] and o["status"] in ("Chờ xác nhận", "Đang đóng gói", "Đang giao"):
+        lines.append(f"Dự kiến giao: {o['eta']}")
+    if o["address"]:
+        lines.append(f"Địa chỉ nhận: {o['address']}")
+    if o["note"]:
+        lines.append(f"Ghi chú: {o['note']}")
+    return "\n".join(lines)
+
+
+def answer_order_query(text: str, history: Optional[list] = None) -> Optional[str]:
+    """Trả lời câu hỏi tra cứu đơn hàng, hoặc None nếu đây không phải câu hỏi về đơn.
+
+    text: tin nhắn hiện tại của khách.
+    history: (tùy chọn) các tin nhắn trước đó của khách, để ghép mã đơn ở tin này
+    với số điện thoại ở tin sau.
+    """
+    prev = list(history or [])
+    code, phone = extract_order_code(text), extract_phone(text)
+    wants = is_order_query(text) or bool(code)
+    if not wants and phone and any(extract_order_code(t) for t in prev):
+        wants = True
+    if not wants:
+        return None
+
+    for t in prev:  # lấy thông tin còn thiếu từ các tin trước
+        code = code or extract_order_code(t)
+        phone = phone or extract_phone(t)
+
+    if not code:
+        return ("Để tra cứu đơn hàng, bạn vui lòng gửi giúp mình mã đơn (dạng DH1001) "
+                "và số điện thoại đặt hàng nhé.")
+    if not phone:
+        return (f"Mình đã nhận mã đơn {code}. Bạn vui lòng gửi thêm số điện thoại đặt hàng "
+                "để mình xác minh và tra cứu nhé.")
+    order = find_order(code, phone)
+    if not order:
+        return (f"Mình không tìm thấy đơn {code} khớp với số điện thoại này. "
+                "Bạn kiểm tra lại mã đơn và số điện thoại giúp mình nhé.")
+    return format_order(order)
+
+
+def lookup_order_tool(order_code: str, phone: str) -> dict:
+    """Dùng làm function/tool cho Gemini (hoặc agent khác): trả dict để model tự diễn đạt."""
+    order = find_order(order_code, phone)
+    if not order:
+        return {"found": False, "message": "Không tìm thấy đơn khớp mã đơn và số điện thoại."}
+    return {"found": True, "order": order}
