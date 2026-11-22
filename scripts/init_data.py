@@ -9,4 +9,7 @@ s = load_settings()
 db = Database(s.app_db_path)
 db.init()
 ChatService(db, s, StubAgent()).ensure_bootstrap_admin()
+if s.seed_demo:
+    from app.demo_seed import seed_demo
+    print(f"Dữ liệu mẫu: {seed_demo(db, s)}")
 print(f"OK: {s.app_db_path} (admin: {'đã tạo/đã có' if s.admin_user else 'chưa cấu hình ADMIN_BOOTSTRAP_USER'})")

@@ -4,7 +4,13 @@
   var log = document.getElementById("log"), form = document.getElementById("form"),
       input = document.getElementById("input"), sendBtn = document.getElementById("send"),
       banner = document.getElementById("banner"), statusEl = document.getElementById("status"),
-      restart = document.getElementById("restart");
+      restart = document.getElementById("restart"), chips = document.getElementById("chips"),
+      closeBtn = document.getElementById("close");
+  var QUICK = ["Tư vấn size", "Chính sách đổi trả", "Chính sách bảo hành", "Tra cứu đơn hàng", "Gặp nhân viên"];
+  if (/[?&]embed=1/.test(location.search)) {
+    document.body.classList.add("embed"); closeBtn.hidden = false;
+    closeBtn.addEventListener("click", function () { parent.postMessage("svn:close", "*"); });
+  }
   var STATUS_TEXT = { AI_Handling: "Trợ lý AI", Waiting_Agent: "Đang chờ nhân viên", Agent_Handling: "Nhân viên đang hỗ trợ", Closed: "Đã kết thúc" };
   var ROLE_NAME = { ai: "Trợ lý Savani", staff: "Nhân viên CSKH" };
   var sid = null, token = null, status = "AI_Handling", lastId = 0, sending = false, poll = null;
@@ -14,6 +20,16 @@
   function load(k) { try { return sessionStorage.getItem(k); } catch (e) { return null; } }
   function uuid() { return (crypto.randomUUID ? crypto.randomUUID() : String(Date.now()) + Math.random().toString(16).slice(2)); }
   function el(tag, cls, text) { var e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; }
+
+  function renderChips() {
+    chips.textContent = "";
+    QUICK.forEach(function (q) {
+      var b = el("button", null, q); b.type = "button";
+      b.addEventListener("click", function () { if (!sending && !input.disabled) send(q, null); });
+      chips.appendChild(b);
+    });
+  }
+  renderChips();
 
   function showBanner(t) { banner.textContent = t; banner.hidden = !t; }
 
@@ -88,7 +104,7 @@
       if (r.res.status === 403) { showBanner("Phiên không còn hợp lệ. Đang bắt đầu lại."); reset(true); return; }
       if (r.res.status === 409 && r.body.error && r.body.error.code === "session_closed") { applyStatus("Closed"); }
       showBanner(errorMessage(r.res, r.body));
-    }).catch(function () { dropPending(); showBanner("Không kết nối được máy chủ. Vui lòng thử lại."); })
+    }).catch(function () { dropPending(); showBanner("Không kết nối được máy chủ. Vui lòng thử lại sau ít phút hoặc liên hệ hotline."); })
       .then(function () { sending = false; });
   }
 

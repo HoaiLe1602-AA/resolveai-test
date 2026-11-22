@@ -1,6 +1,6 @@
 """Agent MẪU theo từ khóa (tương đương FAKE_LLM=1), chỉ để chạy được giao diện đầu-cuối.
 
-KHÔNG phải Agent thật và KHÔNG chứa nghiệp vụ chính thức: câu trả lời chính sách là dữ liệu mẫu.
+KHÔNG phải Agent thật. Câu trả lời chính sách lấy theo tham số đã chốt ở Mục 6.4 (data/policies, KB-01..KB-05).
 Thay bằng Agent LangGraph (Mục 20) bằng cách hiện thực AgentPort.run_turn.
 """
 from __future__ import annotations
@@ -25,6 +25,42 @@ def norm(text: str) -> str:
     t = unicodedata.normalize("NFD", text.lower())
     t = "".join(ch for ch in t if unicodedata.category(ch) != "Mn")
     return t.replace("đ", "d").strip()
+
+# ---- Tư vấn size theo bảng size phổ thông (KB-03, KB-04), Savani cần xác nhận số đo riêng
+SIZE_SOURCE = [{"title": "Bảng size (KB-03, KB-04)", "section": "Gợi ý theo chiều cao, cân nặng"}]
+_SIZES = ["S", "M", "L", "XL", "2XL"]
+_WEIGHT_CUTS = {"nam": [58, 65, 72, 80], "nu": [47, 53, 59, 65]}
+
+
+def parse_body(raw: str) -> dict:
+    """Rút giới tính, chiều cao (cm), cân nặng (kg) từ một câu tự do."""
+    t = norm(raw)
+    out: dict = {}
+    if re.search(r"\b(nam|dan ong|con trai|ban trai|chong)\b", t):
+        out["gender"] = "nam"
+    elif re.search(r"\b(nu|phu nu|con gai|ban gai|vo)\b", t):
+        out["gender"] = "nu"
+    m = re.search(r"\b([12])\s*m\s*(\d{1,2})\b", t) or re.search(r"\b([12])[,.](\d{1,2})\s*m\b", t)
+    if m:
+        frac = m.group(2)
+        out["height"] = int(m.group(1)) * 100 + (int(frac) * (10 if len(frac) == 1 else 1))
+    else:
+        m = re.search(r"\b(1[3-9]\d|20\d)\s*(?:cm)?\b", t)
+        if m:
+            out["height"] = int(m.group(1))
+    m = re.search(r"\b(\d{2,3})\s*(?:kg|ky|kí|can)\b", t) or re.search(r"\b(?:nang|can nang)\s*(\d{2,3})\b", t)
+    if m and 30 <= int(m.group(1)) <= 150:
+        out["weight"] = int(m.group(1))
+    return out
+
+
+def recommend_size(gender: str, height: int, weight: int) -> tuple[str, str | None]:
+    idx = sum(weight >= c for c in _WEIGHT_CUTS[gender])
+    tall = 178 if gender == "nam" else 165
+    if height >= tall and idx < len(_SIZES) - 1:
+        idx += 1
+    alt = _SIZES[idx + 1] if idx + 1 < len(_SIZES) else None
+    return _SIZES[idx], alt
 
 
 def _has(t: str, words) -> bool:
@@ -69,6 +105,14 @@ class StubAgent:
             return AgentOutput("Mình rất tiếc về trải nghiệm này của bạn. Mình chuyển ngay cho nhân viên "
                                "CSKH để hỗ trợ bạn.", state, intent="Khiếu nại", handoff_reason="HO-04")
 
+        # ---- Đang tư vấn size: nếu câu mới không cung cấp thông tin nào thì thoát luồng, xử lý như bình thường
+        if state.get("flow") == "size":
+            found = parse_body(inp.text)
+            if found:
+                return self._size_step(state, found)
+            state.pop("flow", None)
+            state.pop("size", None)
+
         # ---- Đang thu thập thông tin Ticket
         if state.get("flow") == "ticket":
             return self._ticket_step(inp, state, t)
@@ -79,21 +123,39 @@ class StubAgent:
             state.update(flow="ticket", draft={"type": ttype}, asking=None, awaiting_confirm=False)
             return self._ask_next(state, "Mình sẽ ghi nhận yêu cầu " + ttype.lower() + " của bạn. ", ttype)
 
+        # ---- Tư vấn size
+        if "size" in t and not _has(t, ["doi size", "doi hang", "doi tra", "bao hanh"]) or _has(
+                t, ["mac vua", "chon co", "co ao", "nen mac"]):
+            state.update(flow="size", size={})
+            return self._size_step(state, parse_body(inp.text), intro=True)
+
         # ---- Tư vấn theo dữ liệu mẫu
-        if _has(t, ["doi tra", "doi hang", "tra hang"]):
+        if _has(t, ["hoan tien"]):
             return AgentOutput(
-                "Savani nhận đổi trả trong 15 ngày kể từ ngày nhận hàng, sản phẩm còn tem mác và chưa qua sử "
-                "dụng. Chính sách không áp dụng cho đồ lót, tất/vớ, phụ kiện và hàng giảm giá từ 50%.",
-                state, sources=[{"title": "Chính sách đổi trả (dữ liệu mẫu)", "section": "Điều kiện đổi trả"}],
+                "Savani chỉ hoàn tiền khi sản phẩm lỗi do nhà sản xuất mà kho hết hàng để đổi. Tiền được hoàn qua "
+                "chuyển khoản ngân hàng trong 3 - 5 ngày làm việc kể từ khi kho nhận lại hàng hoàn. "
+                "Việc hoàn tiền do nhân viên CSKH xác nhận.",
+                state, sources=[{"title": "Chính sách đổi trả và hoàn tiền (KB-01)", "section": "Chính sách hoàn tiền"}],
+                intent="Đổi trả")
+        if _has(t, ["doi tra", "doi hang", "tra hang", "doi size"]):
+            return AgentOutput(
+                "Savani nhận đổi trả trong 7 ngày kể từ ngày bạn nhận hàng thành công, với sản phẩm còn nguyên tem "
+                "mác, chưa qua sử dụng, chưa giặt tẩy, không bám bẩn/mùi lạ. Chính sách không áp dụng cho đồ lót, "
+                "tất/vớ, phụ kiện (thắt lưng, ví, mũ) và hàng giảm giá từ 50% trở lên (trừ lỗi nhà sản xuất). "
+                "Lỗi sản xuất hoặc giao sai thì Savani chịu phí vận chuyển 2 chiều; đổi size/màu theo nhu cầu "
+                "cá nhân thì phí 2 chiều đồng giá 30.000đ.",
+                state, sources=[{"title": "Chính sách đổi trả và hoàn tiền (KB-01)", "section": "Điều kiện đổi trả"}],
                 intent="Đổi trả")
         if "bao hanh" in t:
             return AgentOutput(
-                "Savani bảo hành sản phẩm lỗi do nhà sản xuất trong 30 ngày kể từ ngày nhận hàng.",
-                state, sources=[{"title": "Chính sách bảo hành (dữ liệu mẫu)", "section": "Thời hạn bảo hành"}],
+                "Savani bảo hành 30 ngày kể từ ngày nhận hàng đối với lỗi kỹ thuật sản xuất (bung đường chỉ, hỏng "
+                "khóa kéo, đứt cúc). Savani từ chối bảo hành khi hư hỏng do ngoại lực (rách do vật sắc nhọn, cháy, "
+                "xước), phai màu do giặt sai hướng dẫn trên nhãn, hoặc quá 30 ngày.",
+                state, sources=[{"title": "Chính sách bảo hành (KB-02)", "section": "Thời hạn bảo hành"}],
                 intent="Bảo hành")
         if _has(t, ["gio lam viec", "mo cua", "may gio"]):
             return AgentOutput("CSKH Savani làm việc 08:00-17:30, từ Thứ Hai đến Thứ Bảy.", state,
-                               sources=[{"title": "Thông tin CSKH (dữ liệu mẫu)", "section": "Giờ làm việc"}],
+                               sources=[{"title": "Giờ làm việc và thời gian phản hồi của CSKH (KB-05)", "section": "Giờ làm việc"}],
                                intent="Tư vấn")
         if _has(t, ["don hang", "ma don", "tra don", "giao hang"]):
             return AgentOutput("[Bản mẫu] Để tra cứu đơn hàng, bạn cần cung cấp mã đơn và 4 số cuối số điện "
@@ -110,6 +172,29 @@ class StubAgent:
                                state)
         return AgentOutput("Mình chưa có thông tin chính thức cho câu hỏi này.", state,
                            intent=state.get("intent"), handoff_reason="HO-01")
+
+    # ------------------------------------------------------------------ Size
+    @staticmethod
+    def _size_step(state: dict, found: dict, intro: bool = False) -> AgentOutput:
+        info = {**state.get("size", {}), **found}
+        state["size"] = info
+        lead = "Mình sẽ tư vấn size giúp bạn. " if intro else ""
+        if "gender" not in info:
+            return AgentOutput(lead + "Bạn chọn size cho nam hay nữ? (Bạn có thể gửi luôn chiều cao và cân nặng, "
+                               "ví dụ: nam 1m72 65kg)", state, intent="Tư vấn")
+        if "height" not in info or "weight" not in info:
+            need = "chiều cao và cân nặng" if "height" not in info and "weight" not in info else (
+                "chiều cao" if "height" not in info else "cân nặng")
+            return AgentOutput(lead + f"Bạn cho mình biết {need} nhé (ví dụ: 1m70, 62kg).", state, intent="Tư vấn")
+        size, alt = recommend_size(info["gender"], info["height"], info["weight"])
+        who = "nam" if info["gender"] == "nam" else "nữ"
+        txt = (f"Với {who} cao {info['height']}cm, nặng {info['weight']}kg, mình gợi ý bạn chọn size {size}.")
+        if alt:
+            txt += f" Nếu bạn thích mặc rộng thoải mái thì chọn size {alt}."
+        txt += " Đây là gợi ý tham khảo; nếu không vừa, Savani hỗ trợ đổi size trong 7 ngày kể từ ngày nhận hàng (sản phẩm còn nguyên tem mác, chưa giặt)."
+        state.pop("flow", None)
+        state.pop("size", None)
+        return AgentOutput(txt, state, sources=SIZE_SOURCE, intent="Tư vấn")
 
     # ------------------------------------------------------------------ Ticket
     @staticmethod

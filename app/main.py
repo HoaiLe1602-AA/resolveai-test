@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from fastapi import Cookie, Depends, FastAPI, Header, Request
+from fastapi import Depends, FastAPI, Header, Request
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
@@ -31,11 +31,6 @@ class ChatIn(BaseModel):
     action: str | None = None
 
 
-class LoginIn(BaseModel):
-    username: str
-    password: str
-
-
 class TextIn(BaseModel):
     text: str
 
@@ -51,6 +46,9 @@ def create_app(settings: Settings | None = None, agent: AgentPort | None = None)
     db.init()
     svc = ChatService(db, settings, agent or build_agent(settings))
     svc.ensure_bootstrap_admin()
+    if settings.seed_demo:
+        from .demo_seed import seed_demo
+        seed_demo(db, settings)
 
     app = FastAPI(title="ResolveAI", docs_url=None, redoc_url=None, openapi_url=None)
     app.state.service = svc
@@ -60,8 +58,8 @@ def create_app(settings: Settings | None = None, agent: AgentPort | None = None)
         body = {"error": {"code": e.code, "message": e.message, **e.extra}}
         return JSONResponse(body, status_code=e.status, headers=e.headers)
 
-    def staff(admin_session: str | None = Cookie(default=None)) -> dict:
-        return svc.require_staff(admin_session)
+    def staff() -> dict:
+        return svc.require_staff()
 
     # ---------------- khách hàng
     @app.get("/healthz")
@@ -81,21 +79,6 @@ def create_app(settings: Settings | None = None, agent: AgentPort | None = None)
         return svc.get_messages(session_id, x_session_token, after)
 
     # ---------------- nhân viên
-    @app.post("/api/admin/login")
-    def login(body: LoginIn):
-        token = svc.login(body.username, body.password)
-        resp = JSONResponse({"ok": True})
-        resp.set_cookie("admin_session", token, httponly=True, samesite="strict",
-                        secure=settings.cookie_secure, max_age=settings.staff_session_hours * 3600, path="/")
-        return resp
-
-    @app.post("/api/admin/logout")
-    def logout(admin_session: str | None = Cookie(default=None)):
-        svc.logout(admin_session)
-        resp = JSONResponse({"ok": True})
-        resp.delete_cookie("admin_session", path="/")
-        return resp
-
     @app.get("/api/admin/me")
     def me(s: dict = Depends(staff)):
         return s
@@ -140,14 +123,24 @@ def create_app(settings: Settings | None = None, agent: AgentPort | None = None)
     def dashboard(date_from: str | None = None, date_to: str | None = None, _: dict = Depends(staff)):
         return svc.dashboard(date_from, date_to)
 
-    @app.api_route("/api/admin/kb/docs", methods=["GET", "POST"])
-    @app.api_route("/api/admin/kb/docs/{doc_id}", methods=["PUT", "DELETE"])
-    def kb(doc_id: str | None = None, _: dict = Depends(staff)):
+    @app.get("/api/admin/kb/docs")
+    def kb_list(_: dict = Depends(staff)):
+        return {"items": svc.kb_list()}
+
+    @app.get("/api/admin/kb/docs/{doc_code}")
+    def kb_get(doc_code: str, _: dict = Depends(staff)):
+        return svc.kb_get(doc_code)
+
+    @app.api_route("/api/admin/kb/docs", methods=["POST"])
+    @app.api_route("/api/admin/kb/docs/{doc_code}", methods=["PUT", "DELETE"])
+    def kb_write(doc_code: str | None = None, _: dict = Depends(staff)):
         svc.kb_not_implemented()
 
     # ---------------- giao diện tĩnh (đặt sau cùng để không che /api)
     app.mount("/admin", StaticFiles(directory=WEB_DIR / "admin", html=True), name="admin")
-    app.mount("/", StaticFiles(directory=WEB_DIR / "chat", html=True), name="chat")
+    app.mount("/chat", StaticFiles(directory=WEB_DIR / "chat", html=True), name="chat")      # khung chat (iframe)
+    app.mount("/widget", StaticFiles(directory=WEB_DIR / "widget"), name="widget")           # nút chatbot nhúng
+    app.mount("/", StaticFiles(directory=WEB_DIR / "store", html=True), name="store")        # trang bán hàng demo
     return app
 
 

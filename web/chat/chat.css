@@ -27,3 +27,22 @@ header{display:flex;justify-content:space-between;align-items:center;padding:12p
 .composer button{padding:10px 16px;border:0;border-radius:8px;background:#2563eb;color:#fff;cursor:pointer}
 .composer button:disabled,.composer input:disabled{opacity:.5}
 .restart{margin:0 16px 12px;padding:10px;border-radius:8px;border:1px solid #2563eb;background:#fff;color:#2563eb;cursor:pointer}
+
+.who-head{display:flex;align-items:center;gap:10px}
+.av{width:34px;height:34px;border-radius:50%;background:#c8102e;color:#fff;display:flex;align-items:center;justify-content:center;font-weight:700}
+.close{display:none;border:0;background:none;font-size:26px;line-height:1;color:#6b7280;cursor:pointer;padding:4px 8px}
+.chips{display:flex;gap:6px;flex-wrap:wrap;padding:0 16px 10px}
+.chips button{padding:6px 12px;border-radius:999px;border:1px solid #c8102e;background:#fff;color:#c8102e;font:inherit;font-size:13px;cursor:pointer}
+.chips button:hover{background:#fdecef}
+body.embed{background:#fff}
+body.embed .chat{max-width:none;border:0}
+body.embed .close{display:block}
+body.embed .privacy{font-size:11px}
+:root{--brand:#c8102e}
+.msg.customer,.composer button,.card button{background:var(--brand)}
+.card button{border-color:var(--brand)}
+.card button.alt{background:#fff;color:var(--brand)}
+.restart{border-color:var(--brand);color:var(--brand)}
+.composer input:focus{outline:2px solid var(--brand);outline-offset:0}
+.chips{flex-wrap:nowrap;overflow-x:auto;scrollbar-width:thin}
+.chips button{flex:none;white-space:nowrap}

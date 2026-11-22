@@ -23,6 +23,7 @@ from . import security
 from .agent_port import AgentInput, AgentOutput, AgentPort
 from .config import Settings
 from .db import Database
+from . import kb
 from .hours import in_business_hours
 from .ratelimit import SlidingWindowLimiter
 
@@ -31,6 +32,7 @@ log = logging.getLogger("resolveai")
 CUSTOMER_ACTIONS = {"confirm_ticket", "reject_ticket"}
 ACTION_LABELS = {"confirm_ticket": "Xác nhận yêu cầu", "reject_ticket": "Chỉnh sửa yêu cầu"}
 TICKET_FLOW = ["Mới", "Đang xử lý", "Đã hoàn thành"]
+TICKET_CODE_RE = r"^TK-\d{8}\d{4}$"  # BR5: TK-YYYYMMDDXXXX (không có dấu gạch giữa ngày và số thứ tự)
 TICKETS_NEED_ORDER = {"Đổi trả", "Bảo hành"}
 SLA_IN_HOURS = "Nhân viên sẽ phản hồi bạn trong vòng 15 phút."
 SLA_OUT_HOURS = ("Hiện đang ngoài giờ làm việc (08:00-17:30, Thứ Hai đến Thứ Bảy). "
@@ -62,7 +64,6 @@ class ChatService:
         self.db, self.s, self.agent = db, settings, agent
         self.limiter = limiter or SlidingWindowLimiter(settings.rate_limit_per_min, 60.0)
         self.create_limiter = SlidingWindowLimiter(settings.session_create_limit_per_min, 60.0)
-        self.login_limiter = SlidingWindowLimiter(10, 60.0)
         self.now, self.sleep = now_fn, sleep_fn
         self._locks: dict[str, threading.Lock] = {}
         self._locks_guard = threading.Lock()
@@ -317,7 +318,7 @@ class ChatService:
                     return dup["id"], True
             day = now_dt.astimezone(ZoneInfo(self.s.timezone)).strftime("%Y%m%d")
             n = c.execute("SELECT COUNT(*) FROM ticket WHERE id LIKE ?", (f"TK-{day}%",)).fetchone()[0] + 1
-            code = f"TK-{day}{n:04d}"  # định dạng theo BR5 (Mục 18.3.5 ghi có dấu gạch: cần thống nhất)
+            code = f"TK-{day}{n:04d}"  # TK-YYYYMMDDXXXX
             c.execute("INSERT INTO ticket(id, session_id, type, customer_name, contact, order_id, product,"
                       " description, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?,?,?)",
                       (code, session_id, req["type"], req["customer_name"], req["contact"], req.get("order_id"),
@@ -328,43 +329,20 @@ class ChatService:
 
     # ================================================================ nhân viên
     def ensure_bootstrap_admin(self) -> None:
-        if not (self.s.admin_user and self.s.admin_password):
-            return
+        """Trang quản trị không còn đăng nhập: tạo sẵn một tài khoản nhân viên mặc định để gắn vào
+        thao tác (tiếp nhận phiên, đổi trạng thái Ticket). Mật khẩu '!' = không thể đăng nhập."""
         with self.db.tx() as c:
             if c.execute("SELECT COUNT(*) FROM staff").fetchone()[0] == 0:
                 c.execute("INSERT INTO staff(username, password_hash, created_at) VALUES (?,?,?)",
-                          (self.s.admin_user, security.hash_password(self.s.admin_password), _iso(self.now())))
+                          (self.s.admin_user or "nhanvien", "!", _iso(self.now())))
 
-    def login(self, username: str, password: str) -> str:
-        wait = self.login_limiter.hit((username or "").lower())
-        if wait is not None:
-            self._raise_429(wait)
+    def require_staff(self, token: str | None = None) -> dict:
+        """Không kiểm tra đăng nhập (theo yêu cầu): luôn trả về nhân viên mặc định."""
         with self.db.conn() as c:
-            row = c.execute("SELECT * FROM staff WHERE username=?", (username,)).fetchone()
-        if not security.check_password(password or "", row["password_hash"] if row else None):
-            raise ApiError(401, "invalid_credentials", "Sai tài khoản hoặc mật khẩu.")
-        token = security.new_token()
-        expires = self.now() + timedelta(hours=self.s.staff_session_hours)
-        with self.db.tx() as c:
-            c.execute("INSERT INTO staff_session(token_hash, staff_id, expires_at) VALUES (?,?,?)",
-                      (security.hash_token(token, self.s.secret_key), row["id"], _iso(expires)))
-        return token
-
-    def logout(self, token: str | None) -> None:
-        if token:
-            with self.db.tx() as c:
-                c.execute("DELETE FROM staff_session WHERE token_hash=?",
-                          (security.hash_token(token, self.s.secret_key),))
-
-    def require_staff(self, token: str | None) -> dict:
-        if not token:
-            raise ApiError(401, "not_authenticated", "Cần đăng nhập.")
-        with self.db.conn() as c:
-            row = c.execute("SELECT s.id, s.username, ss.expires_at FROM staff_session ss JOIN staff s"
-                            " ON s.id=ss.staff_id WHERE ss.token_hash=?",
-                            (security.hash_token(token, self.s.secret_key),)).fetchone()
-        if not row or row["expires_at"] <= _iso(self.now()):
-            raise ApiError(401, "not_authenticated", "Phiên đăng nhập không hợp lệ hoặc đã hết hạn.")
+            row = c.execute("SELECT id, username FROM staff ORDER BY id LIMIT 1").fetchone()
+        if not row:
+            self.ensure_bootstrap_admin()
+            return self.require_staff()
         return {"id": row["id"], "username": row["username"]}
 
     def queue(self) -> list[dict]:
@@ -512,7 +490,16 @@ class ChatService:
                 "tickets_by_status": {s: tickets.get(s, 0) for s in TICKET_FLOW},
                 "avg_latency_ms": round(lat) if lat is not None else None}
 
-    # ---- Kho tài liệu KB: thuộc module RAG, chưa hiện thực trong khung mẫu
+    # ---- Kho tài liệu KB: chỉ xem (data/policies). Tải lên/sửa/xóa thuộc module RAG (FR-ADM-02/03)
+    def kb_list(self) -> list[dict]:
+        return [{k: v for k, v in d.items() if k != "content"} for d in kb.load_docs(self.s.policies_dir)]
+
+    def kb_get(self, doc_code: str) -> dict:
+        for d in kb.load_docs(self.s.policies_dir):
+            if d["doc_code"] == doc_code:
+                return d
+        raise ApiError(404, "not_found", "Không tìm thấy tài liệu.")
+
     def kb_not_implemented(self):
-        raise ApiError(501, "not_implemented", "Quản lý kho tài liệu KB chưa được hiện thực trong khung mẫu "
+        raise ApiError(501, "not_implemented", "Tải lên, sửa, xóa tài liệu KB chưa được hiện thực trong khung mẫu "
                                               "(thuộc module RAG, FR-ADM-02/03).")
