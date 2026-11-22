@@ -13,6 +13,7 @@ from .config import Settings, load_settings
 from .db import Database
 from .service import ApiError, ChatService
 from .stub_agent import StubAgent
+from .policy_admin import make_router as make_policy_router
 
 WEB_DIR = Path(__file__).resolve().parent.parent / "web"
 
@@ -138,7 +139,13 @@ def create_app(settings: Settings | None = None, agent: AgentPort | None = None)
     @app.api_route("/api/admin/kb/docs/{doc_code}", methods=["PUT", "DELETE"])
     def kb_write(doc_code: str | None = None, _: dict = Depends(staff)):
         svc.kb_not_implemented()
+    @app.api_route("/api/admin/kb/docs", methods=["POST"])
+    @app.api_route("/api/admin/kb/docs/{doc_code}", methods=["PUT", "DELETE"])
+    def kb_write(doc_code: str | None = None, _: dict = Depends(staff)):
+        svc.kb_not_implemented()
 
+    app.include_router(make_policy_router())     
+    
     # ---------------- giao diện tĩnh (đặt sau cùng để không che /api)
     app.mount("/admin", StaticFiles(directory=WEB_DIR / "admin", html=True), name="admin")
     app.mount("/chat", StaticFiles(directory=WEB_DIR / "chat", html=True), name="chat")      # khung chat (iframe)
