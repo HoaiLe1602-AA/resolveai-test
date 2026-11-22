@@ -1,4 +1,4 @@
-# ResolveAI - Mục 25: Giao diện chat + triển khai (khung mẫu)
+# ResolveAI 
 
 Web chat khách hàng + trang quản trị nhân viên + Backend FastAPI, đóng gói một container (docker-compose).
 
