@@ -1,7 +1,4 @@
-"""API thêm/sửa/xóa chính sách thủ công (ghi file .md vào data/policies).
-
-Bảo mật: mọi thao tác cần header X-Admin-Key khớp biến môi trường POLICY_ADMIN_KEY
-(nếu không đặt thì dùng ADMIN_BOOTSTRAP_PASSWORD). Không có khóa nào được đặt thì từ chối hết.
+"""API thêm/sửa/xóa chính sách thủ công 
 """
 from __future__ import annotations
 
